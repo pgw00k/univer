@@ -1195,7 +1195,7 @@ export function HideColMenuItemFactory(accessor: IAccessor): IMenuButtonItem {
         disabled$: getCurrentRangeDisable$(accessor, {
             workbookTypes: [WorkbookEditablePermission],
             worksheetTypes: [WorksheetEditPermission, WorksheetSetColumnStylePermission],
-            rangeTypes: [RangeProtectionPermissionEditPoint],
+            rangeTypes: [RangeProtectionPermissionViewPoint],
         }),
         hidden$: getMenuHiddenObservable(accessor, UniverInstanceType.UNIVER_SHEET),
     };
