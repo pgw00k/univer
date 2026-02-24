@@ -146,7 +146,7 @@ export function SheetTableFilterPanel() {
     return (
         <div
             className={`
-              univer-box-border univer-flex univer-w-[312px] univer-flex-col univer-rounded-[10px] univer-bg-white
+              univer-box-border univer-flex univer-min-w-[312px] univer-flex-col univer-rounded-[10px] univer-bg-white
               univer-p-4 univer-shadow-lg
               dark:!univer-border-gray-600 dark:!univer-bg-gray-700
             `}
@@ -172,8 +172,8 @@ export function SheetTableFilterPanel() {
                     onChange={(value) => setFilterBy(value as FilterByEnum)}
                 />
             </div>
-            <div className="univer-z-10 univer-h-60 univer-w-[280px]">
-                <div className="univer-mt-3 univer-h-full univer-w-full">
+            <div className="univer-z-10 univer-h-60">
+                <div className="univer-mt-3 univer-size-full">
                     {filterBy === FilterByEnum.Items
                         ? (
                             <SheetTableItemsFilterPanel
@@ -202,18 +202,18 @@ export function SheetTableFilterPanel() {
             <div
                 className={`
                   univer-flex-wrap-nowrap univer-mt-4 univer-inline-flex univer-flex-shrink-0 univer-flex-grow-0
-                  univer-justify-between univer-overflow-hidden
+                  univer-justify-between univer-gap-6 univer-overflow-hidden
                 `}
             >
                 <Button
                     disabled={tableFilter === undefined}
                     onClick={onClearFilter}
                 >
-                    {localeService.t('sheets-filter.panel.clear-filter')}
+                    {localeService.t('sheets-table.filter.clear-filter')}
                 </Button>
                 <div>
-                    <Button className="univer-mr-2" onClick={onCancel}>{localeService.t('sheets-filter.panel.cancel')}</Button>
-                    <Button variant="primary" onClick={onApply}>{localeService.t('sheets-filter.panel.confirm')}</Button>
+                    <Button className="univer-mr-2" onClick={onCancel}>{localeService.t('sheets-table.filter.cancel')}</Button>
+                    <Button variant="primary" onClick={onApply}>{localeService.t('sheets-table.filter.confirm')}</Button>
                 </div>
             </div>
         </div>
@@ -223,7 +223,7 @@ export function SheetTableFilterPanel() {
 function useFilterByOptions(localeService: LocaleService) {
     const locale = localeService.getCurrentLocale();
     return useMemo(() => [
-        { label: localeService.t('sheets-filter.panel.by-values'), value: FilterByEnum.Items },
-        { label: localeService.t('sheets-filter.panel.by-conditions'), value: FilterByEnum.Condition },
+        { label: localeService.t('sheets-table.filter.by-values'), value: FilterByEnum.Items },
+        { label: localeService.t('sheets-table.filter.by-conditions'), value: FilterByEnum.Condition },
     ], [locale, localeService]);
 }

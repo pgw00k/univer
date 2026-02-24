@@ -802,8 +802,8 @@ export class SpreadsheetSkeleton extends SheetSkeleton {
         return this._getRangeByViewBounding(this.rowHeightAccumulation, this.columnWidthAccumulation, vpInfo?.viewBound);
     }
 
-    getCacheRangeByViewport(vpInfo?: IViewportInfo): IRange {
-        return this._getRangeByViewBounding(this.rowHeightAccumulation, this.columnWidthAccumulation, vpInfo?.cacheBound);
+    getCacheRangeByViewport(vpInfo?: IViewportInfo, isPrinting?: boolean): IRange {
+        return this._getRangeByViewBounding(this.rowHeightAccumulation, this.columnWidthAccumulation, vpInfo?.cacheBound, isPrinting);
     }
 
     getRangeByViewBound(bound?: IBoundRectNoAngle): IRange {
@@ -1198,7 +1198,8 @@ export class SpreadsheetSkeleton extends SheetSkeleton {
     protected _getRangeByViewBounding(
         rowHeightAccumulation: number[],
         columnWidthAccumulation: number[],
-        viewBound?: IBoundRectNoAngle
+        viewBound?: IBoundRectNoAngle,
+        isPrinting?: boolean
     ): IRange {
         const lenOfRowData = rowHeightAccumulation.length;
         const lenOfColData = columnWidthAccumulation.length;
@@ -1214,9 +1215,32 @@ export class SpreadsheetSkeleton extends SheetSkeleton {
 
         // viewBound contains header, so need to subtract the header height and margin
         const startRow = searchArray(rowHeightAccumulation, Math.round(viewBound.top) - this.columnHeaderHeightAndMarginTop);
-        const endRow = searchArray(rowHeightAccumulation, Math.round(viewBound.bottom) - this.columnHeaderHeightAndMarginTop);
+
+        const endY = Math.round(viewBound.bottom) - this.columnHeaderHeightAndMarginTop;
+        let endRow = searchArray(rowHeightAccumulation, endY);
+        // If the endY is exactly on the boundary, need to minus 1 to get the correct endRow.
+        if (endRow < lenOfRowData && rowHeightAccumulation[endRow - 1] === endY) {
+            endRow -= 1;
+        }
+
         const startColumn = searchArray(columnWidthAccumulation, Math.round(viewBound.left) - this.rowHeaderWidthAndMarginLeft);
-        const endColumn = searchArray(columnWidthAccumulation, Math.round(viewBound.right) - this.rowHeaderWidthAndMarginLeft);
+
+        const endX = Math.round(viewBound.right) - this.rowHeaderWidthAndMarginLeft;
+        let endColumn = searchArray(columnWidthAccumulation, endX);
+        // If the endX is exactly on the boundary, need to minus 1 to get the correct endColumn.
+        if (endColumn < lenOfColData && columnWidthAccumulation[endColumn - 1] === endX) {
+            endColumn -= 1;
+        }
+
+        // If the get range is used for visible range, the endRow and endColumn need to minus 1.
+        if (isPrinting) {
+            return {
+                startRow,
+                endRow: endRow === lenOfRowData - 1 ? endRow : endRow - 1,
+                startColumn,
+                endColumn: endColumn === lenOfColData - 1 ? endColumn : endColumn - 1,
+            };
+        }
 
         return {
             startRow,
@@ -1244,7 +1268,7 @@ export class SpreadsheetSkeleton extends SheetSkeleton {
             };
         }
 
-        return this.worksheet.getSpanModel().getMergedCellRangeForSkeleton(range.startRow, range.startColumn, range.endRow, range.endColumn);
+        return this.worksheet.getMergedCellRange(range.startRow, range.startColumn, range.endRow, range.endColumn);
     }
 
     override resetCache(): void {
@@ -1447,6 +1471,7 @@ export class SpreadsheetSkeleton extends SheetSkeleton {
 
         const cell = this.worksheet.getCell(row, col) || this.worksheet.getCellRaw(row, col);
         const style = this.worksheet.getComposedCellStyleByCellData(row, col, cell);
+        if (!cell && Object.keys(style).length === 0) return;
 
         this._setBgStylesCache(row, col, style, options);
         this._setBorderStylesCache(row, col, style, options);
@@ -1685,7 +1710,13 @@ export function getDocsSkeletonPageSize(documentSkeleton: DocumentSkeleton, angl
         return null;
     }
     const { pages } = skeletonData;
+    if (!pages || pages.length === 0) {
+        return null;
+    }
     const lastPage = pages[pages.length - 1];
+    if (!lastPage) {
+        return null;
+    }
     const { width, height } = lastPage;
 
     if (angle === 0) {

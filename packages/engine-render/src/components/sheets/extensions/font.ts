@@ -244,9 +244,37 @@ export class Font extends SheetExtension {
         }
         //#endregion
 
-        const visibleRow = spreadsheetSkeleton.worksheet.getRowVisible(row);
-        const visibleCol = spreadsheetSkeleton.worksheet.getColVisible(col);
-        if (!visibleRow || !visibleCol) return true;
+        if (notInMergeRange) {
+            const visibleRow = spreadsheetSkeleton.worksheet.getRowVisible(row);
+            if (!visibleRow) return true;
+
+            const visibleCol = spreadsheetSkeleton.worksheet.getColVisible(col);
+            if (!visibleCol) return true;
+        } else {
+            let isAllRowHidden = true;
+
+            for (let r = mergeInfo.startRow; r <= mergeInfo.endRow; r++) {
+                const visibleRow = spreadsheetSkeleton.worksheet.getRowVisible(r);
+                if (visibleRow) {
+                    isAllRowHidden = false;
+                    break;
+                }
+            }
+
+            if (isAllRowHidden) return true;
+
+            let isAllColHidden = true;
+
+            for (let c = mergeInfo.startColumn; c <= mergeInfo.endColumn; c++) {
+                const visibleCol = spreadsheetSkeleton.worksheet.getColVisible(c);
+                if (visibleCol) {
+                    isAllColHidden = false;
+                    break;
+                }
+            }
+
+            if (isAllColHidden) return true;
+        }
 
         // Since we cannot predict when fontRenderExtension?.isSkip might change,
         // we must check it every time and retrieve cell data directly from the worksheet,
@@ -489,26 +517,9 @@ export class Font extends SheetExtension {
         const { vertexAngle = 0, wrapStrategy, cellData } = fontCache;
         if (cellData?.v === undefined || cellData?.v === null) return;
         const text = extractPureTextFromCell(cellData);
-        let { startX, startY, endX, endY } = renderFontCtx;
-        let cellWidth = endX - startX - paddingLeft - paddingRight;
+        const { startX, startY, endX, endY } = renderFontCtx;
+        const cellWidth = endX - startX - paddingLeft - paddingRight;
         const cellHeight = endY - startY - paddingTop - paddingBottom;
-
-        const overflowRectangle = overflowCache.getValue(row, col);
-        const isOverflow = !(wrapStrategy === WrapStrategy.WRAP && vertexAngle === 0);
-        if (isOverflow && overflowRectangle) {
-            const endColumn = overflowRectangle.endColumn;
-            const startColumn = overflowRectangle.startColumn;
-            const startRow = overflowRectangle.startRow;
-            const endRow = overflowRectangle.endRow;
-            const endCell = renderFontCtx.spreadsheetSkeleton.getCellWithCoordByIndex(endRow, endColumn);
-            endX = endCell.endX;
-            endY = endCell.endY;
-
-            const startCell = renderFontCtx.spreadsheetSkeleton.getCellWithCoordByIndex(startRow, startColumn);
-            startX = startCell.startX;
-            startY = startCell.startY;
-            cellWidth = endX - startX - paddingLeft - paddingRight;
-        }
 
         // If the horizontal alignment is not specified, we need to determine it based on the cell value type.
         let hAlign = fontCache.horizontalAlign;
@@ -535,6 +546,7 @@ export class Font extends SheetExtension {
             color: fontCache.style?.cl?.rgb,
             strokeLine: Boolean(fontCache.style?.st?.s),
             underline: Boolean(fontCache.style?.ul?.s),
+            underlineType: fontCache.style?.ul?.t,
             cellValueType: cellData.t,
         });
     }

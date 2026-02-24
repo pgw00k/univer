@@ -27,6 +27,7 @@ import enUS from '@univerjs/mockdata/locales/en-US';
 import esES from '@univerjs/mockdata/locales/es-ES';
 import faIR from '@univerjs/mockdata/locales/fa-IR';
 import frFR from '@univerjs/mockdata/locales/fr-FR';
+import jaJP from '@univerjs/mockdata/locales/ja-JP';
 import koKR from '@univerjs/mockdata/locales/ko-KR';
 import ruRU from '@univerjs/mockdata/locales/ru-RU';
 import viVN from '@univerjs/mockdata/locales/vi-VN';
@@ -50,8 +51,10 @@ import { UniverSheetsZenEditorPlugin } from '@univerjs/sheets-zen-editor';
 import { UniverUIPlugin } from '@univerjs/ui';
 import { UniverVue3AdapterPlugin } from '@univerjs/ui-adapter-vue3';
 import { UniverWebComponentAdapterPlugin } from '@univerjs/ui-adapter-web-component';
-import { UniverSheetsCustomShortcutPlugin } from './custom-plugin/custom-shortcut';
-import ImportCSVButtonPlugin from './custom-plugin/import-csv-button';
+import { customRegisterEvent } from './custom/custom-register-event';
+import { UniverSheetsCustomShortcutPlugin } from './custom/custom-shortcut';
+import ImportCSVButtonPlugin from './custom/import-csv-button';
+import { simpleRangePopupDemo } from './custom/simple-range-popup';
 
 import '@univerjs/sheets/facade';
 import '@univerjs/ui/facade';
@@ -103,6 +106,7 @@ function createNewInstance() {
             [LocaleType.ES_ES]: esES,
             [LocaleType.FA_IR]: faIR,
             [LocaleType.FR_FR]: frFR,
+            [LocaleType.JA_JP]: jaJP,
             [LocaleType.KO_KR]: koKR,
             [LocaleType.RU_RU]: ruRU,
             [LocaleType.VI_VN]: viVN,
@@ -120,6 +124,14 @@ function createNewInstance() {
         [UniverRenderEnginePlugin],
         [UniverUIPlugin, {
             container: 'app',
+            ribbonType: 'classic',
+            customFontFamily: {
+                list: [
+                    { value: 'PingFang SC', label: '苹方（简）', category: 'sans-serif' },
+                    { value: 'Helvetica Neue', label: 'Helvetica Neue', category: 'sans-serif' },
+                ],
+                // override: true,
+            },
         }],
         [UniverWebComponentAdapterPlugin],
         [UniverVue3AdapterPlugin],
@@ -187,6 +199,14 @@ function createNewInstance() {
 
     window.univer = univer;
     window.univerAPI = FUniver.newAPI(univer);
+    // window.univerAPI.addFonts([
+    //     { value: 'PingFang SC', label: '苹方（简）', category: 'sans-serif' },
+    //     { value: 'Helvetica Neue', label: 'Helvetica Neue', category: 'sans-serif' },
+    // ]);
+
+    customRegisterEvent(univer, window.univerAPI!);
+    // customRangePopups(univer, window.univerAPI!);
+    simpleRangePopupDemo(univer, window.univerAPI!);
 }
 
 createNewInstance();

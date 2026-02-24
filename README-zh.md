@@ -5,8 +5,8 @@
     <img src="./docs/img/banner-dark.png" alt="Univer" width="400" />
 </picture>
 
-Univer 是一个开源的办公套件引擎，旨在为开发者提供一个强大、灵活且易于使用的办公套件解决方案。它支持电子表格、文档和幻灯片等多种类型的文档，并提供了丰富的功能和高度的可扩展性。<br />
-**可扩展 · 可嵌入 · 高性能**
+Univer 是一个开源的办公套件引擎，旨在为开发者提供一个强大、灵活且易于使用的办公套件解决方案。它专注于电子表格的创建与编辑，提供丰富的功能和高度的可扩展性。<br />
+**可扩展 · 可嵌入 · 高性能**<br />
 
 [English][readme-en-link] | **简体中文** | [日本語][readme-ja-link] | [Español][readme-es-link] <br />
 [官网][official-site-link] | [文档][documentation-link] | [在线体验][playground-link] | [博客][blog-link]
@@ -24,6 +24,10 @@ Univer 是一个开源的办公套件引擎，旨在为开发者提供一个强�
 [![Trendshift][github-trending-shield]][github-trending-url]
 
 </div>
+
+通过 [Univer Platform](https://github.com/dream-num/univer-mcp)，用自然语言驱动 Univer Spreadsheets，构建 AI-Native Spreadsheet。
+
+https://github.com/user-attachments/assets/7429bd5f-d769-4057-9e67-353337531024
 
 <details open>
 <summary>
@@ -112,13 +116,14 @@ Univer 内置多种语言支持，包括：
 - `ru-RU`
 - `vi-VN`
 - `fa-IR`
+- `ja-JP`
 - `ko-KR`
 - `es-ES`
 - `ca-ES`
 
 其中 `zh-CN` 和 `en-US` 由官方支持，其余为社区贡献。
 
-你可以通过[自定义语言包](https://univer.ai/zh-CN/guides/sheet/getting-started/i18n#%E4%BD%BF%E7%94%A8%E8%87%AA%E5%AE%9A%E4%B9%89%E8%AF%AD%E8%A8%80%E5%8C%85)来添加你想要的语言。也可以参考[贡献指南](/CONTRIBUTING.md)来帮助我们添加新的语言支持。
+你可以通过[自定义语言包](https://docs.univer.ai/guides/sheets/getting-started/i18n#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%AF%AD%E8%A8%80%E5%8C%85)来添加你想要的语言。也可以参考[贡献指南](/CONTRIBUTING.md)来帮助我们添加新的语言支持。
 
 ## 👾 在线示例
 
@@ -126,7 +131,7 @@ Univer 内置多种语言支持，包括：
 
 [![][examples-preview-biaoda]][examples-link-biaoda]
 
-你可以在 [Univer Examples](https://univer.ai/examples) 中找到所有的示例。
+你可以在 [Univer Examples](https://docs.univer.ai/showcase) 中找到所有的示例。
 
 | **📊 Spreadsheets** | **📊 Multi-instance** | **📊 Uniscript** |
 | :---: | :---: | :---: |

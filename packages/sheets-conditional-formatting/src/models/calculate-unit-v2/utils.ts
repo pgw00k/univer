@@ -18,10 +18,12 @@ import type { CellValue, ICellData, IObjectMatrixPrimitiveType, IRange, Nullable
 import type { IConditionFormattingRule, IValueConfig } from '../../models/type';
 import type { IContext } from './base-calculate-unit';
 import { BooleanNumber, CellValueType, ColorKit, dayjs, ObjectMatrix, Range } from '@univerjs/core';
-import { BooleanValue } from '@univerjs/engine-formula';
+import { BooleanValue, FormulaResultStatus } from '@univerjs/engine-formula';
 import { CFNumberOperator, CFValueType } from '../../base/const';
-import { ConditionalFormattingFormulaService, FormulaResultStatus } from '../../services/conditional-formatting-formula.service';
+import { ConditionalFormattingFormulaService } from '../../services/conditional-formatting-formula.service';
 import { ConditionalFormattingViewModel } from '../conditional-formatting-view-model';
+
+;
 
 export function isFloatsEqual(a: number, b: number) {
     return Math.abs(a - b) < Number.EPSILON;
@@ -161,7 +163,8 @@ export const getValueByType = (value: IValueConfig, matrix: ObjectMatrix<number>
             const result = conditionalFormattingFormulaService.getFormulaResultWithCoords(unitId, subUnitId, cfId, formulaText);
             return result;
         }
-        case CFValueType.num: {
+        case CFValueType.num:
+        default: {
             const v = Number(value.value);
             return {
                 status: FormulaResultStatus.SUCCESS,

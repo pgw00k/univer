@@ -29,10 +29,8 @@ import type {
     ISetRangeValuesMutationParams,
 } from '@univerjs/sheets';
 import type { IUniverSheetsFormulaBaseConfig } from './config.schema';
-
 import type { IFormulaReferenceMoveParam } from './utils/ref-range-formula';
 import type { IUnitRangeWithOffset } from './utils/ref-range-move';
-
 import {
     Disposable,
     ICommandService,
@@ -44,13 +42,13 @@ import {
     Tools,
     UniverInstanceType,
 } from '@univerjs/core';
-
-import { deserializeRangeWithSheetWithCache, ErrorType, FormulaDataModel, generateStringWithSequence, IDefinedNamesService, initSheetFormulaData, LexerTreeBuilder, sequenceNodeType, serializeRangeToRefString, SetArrayFormulaDataMutation, SetFormulaCalculationStartMutation, SetFormulaDataMutation } from '@univerjs/engine-formula';
+import { deserializeRangeWithSheetWithCache, ErrorType, FormulaDataModel, generateStringWithSequence, IDefinedNamesService, initSheetFormulaData, LexerTreeBuilder, sequenceNodeType, serializeRangeToRefString, SetArrayFormulaDataMutation, SetFormulaDataMutation, SetTriggerFormulaCalculationStartMutation } from '@univerjs/engine-formula';
 import {
     ClearSelectionFormatCommand,
     InsertSheetMutation,
     RemoveSheetMutation,
     SetBorderCommand,
+    SetRangeCustomMetadataCommand,
     SetRangeValuesMutation,
     SetStyleCommand,
     SheetInterceptorService,
@@ -115,9 +113,11 @@ export class UpdateFormulaController extends Disposable {
 
                     if (
                         (options && options.onlyLocal === true) ||
+                        (options && options.syncOnly === true) ||
                         params.trigger === SetStyleCommand.id ||
                         params.trigger === SetBorderCommand.id ||
-                        params.trigger === ClearSelectionFormatCommand.id
+                        params.trigger === ClearSelectionFormatCommand.id ||
+                        params.trigger === SetRangeCustomMetadataCommand.id
                     ) {
                         return;
                     }
@@ -141,6 +141,11 @@ export class UpdateFormulaController extends Disposable {
         }
 
         const newSheetFormulaData = this._formulaDataModel.updateFormulaData(unitId, sheetId, cellValue);
+
+        if (Object.keys(newSheetFormulaData).length === 0) {
+            return;
+        }
+
         const newFormulaData = {
             [unitId]: {
                 [sheetId]: newSheetFormulaData,
@@ -153,7 +158,7 @@ export class UpdateFormulaController extends Disposable {
             {
                 unitId,
                 subUnitId: sheetId,
-                cellValue: formulaDataToCellData(newSheetFormulaData),
+                cellValue: formulaDataToCellData(newSheetFormulaData, cellValue),
             },
             {
                 onlyLocal: true,
@@ -164,6 +169,9 @@ export class UpdateFormulaController extends Disposable {
         // update formula model
         this._formulaDataModel.updateArrayFormulaCellData(unitId, sheetId, cellValue);
         this._formulaDataModel.updateArrayFormulaRange(unitId, sheetId, cellValue);
+
+        // update image formula data
+        this._formulaDataModel.updateImageFormulaData(unitId, sheetId, cellValue);
 
         // TODO@Dushusir: When the amount of data is large, the communication overhead is high. The main thread and the worker update their own models to reduce the communication overhead.
         this._commandService.executeCommand(
@@ -265,7 +273,7 @@ export class UpdateFormulaController extends Disposable {
         const calculationMode = config?.initialFormulaComputing ?? CalculationMode.WHEN_EMPTY;
         const params = this._getDirtyDataByCalculationMode(calculationMode);
 
-        this._commandService.executeCommand(SetFormulaCalculationStartMutation.id, params, { onlyLocal: true });
+        this._commandService.executeCommand(SetTriggerFormulaCalculationStartMutation.id, params, { onlyLocal: true });
     }
 
     private _getDirtyDataByCalculationMode(calculationMode: CalculationMode): IFormulaDirtyData {
@@ -362,8 +370,8 @@ export class UpdateFormulaController extends Disposable {
 
             for (const sheetId of sheetDataKeys) {
                 const matrixData = new ObjectMatrix(sheetData[sheetId] || {});
-
                 const newFormulaDataItem = new ObjectMatrix<IFormulaDataItem>();
+                const shouldModifySi: string[] = [];
 
                 // eslint-disable-next-line max-lines-per-function, complexity
                 matrixData.forValue((row, column, formulaDataItem) => {
@@ -379,6 +387,8 @@ export class UpdateFormulaController extends Disposable {
 
                     let shouldModify = false;
                     const refChangeIds: number[] = [];
+                    const { type, from } = formulaReferenceMoveParam;
+
                     for (let i = 0, len = sequenceNodes.length; i < len; i++) {
                         const node = sequenceNodes[i];
 
@@ -387,7 +397,6 @@ export class UpdateFormulaController extends Disposable {
                         }
 
                         const { token, nodeType } = node;
-                        const { type } = formulaReferenceMoveParam;
 
                         // The impact of defined name changes on formula calculation
                         // 1. ref range only changes formulaOrRefString to trigger recalculation
@@ -514,15 +523,30 @@ export class UpdateFormulaController extends Disposable {
                             shouldModify = true;
                             refChangeIds.push(i);
                             // newRefString = ErrorType.REF;
-                        } else if (type === FormulaReferenceMoveType.MoveRange && si) {
-                            // If the operation is a move range and the formula has si, unpack the si to f.
-                            // This is to ensure that the si formula can be recalculated correctly after the move.
-                            shouldModify = true;
+
+                            // If the formula cell has an si, it means the formula cell is source of other same si cells, so the si cells needs to be updated.
+                            if (si && (x ?? 0) === 0 && (y ?? 0) === 0) shouldModifySi.push(si);
                         }
                     }
 
                     if (!shouldModify) {
-                        return true;
+                        /**
+                         * If the operation is a move type, and the formula cell has si and is the same as the current shouldModifySi, unpack the si to f.
+                         * Or the source formula cell is in the moved range.
+                         * This is to ensure that the si formula can be recalculated correctly after the move.
+                         */
+                        if (
+                            si &&
+                            [FormulaReferenceMoveType.MoveRows, FormulaReferenceMoveType.MoveCols, FormulaReferenceMoveType.MoveRange].includes(type)
+                        ) {
+                            if (from && from.startRow <= row && row <= from.endRow && from.startColumn <= column && column <= from.endColumn) {
+                                if ((x ?? 0) === 0 && (y ?? 0) === 0) shouldModifySi.push(si);
+                            } else if (!shouldModifySi.includes(si)) {
+                                return true;
+                            }
+                        } else {
+                            return true;
+                        }
                     }
 
                     const newSequenceNodes = updateRefOffset(sequenceNodes, refChangeIds, x, y);

@@ -30,6 +30,8 @@ import {
     WrapStrategy,
 } from '../types/enum';
 import { ColorBuilder } from './color/color';
+import { ColorKit } from './color/color-kit';
+import { DEFAULT_NUMBER_FORMAT, getNumfmtParseValueFilter } from './numfmt';
 import { ObjectMatrix } from './object-matrix';
 import { Tools } from './tools';
 
@@ -146,7 +148,7 @@ export function isCellCoverable(cell: Nullable<ICellDataForSheetInterceptor>) {
 export function getColorStyle(color: Nullable<IColorStyle>): Nullable<string> {
     if (color) {
         if (color.rgb) {
-            return color.rgb;
+            return new ColorKit(color.rgb).toHexString();
         }
 
         if (color.th) {
@@ -565,6 +567,23 @@ export function covertCellValue(value: CellValue | ICellData): ICellData {
         };
     }
     if (isCellV(value)) {
+        if (typeof value === 'string') {
+            const parseData = getNumfmtParseValueFilter(value);
+
+            if (parseData && parseData.z) {
+                return {
+                    v: parseData.v as number,
+                    p: null,
+                    f: null,
+                    s: {
+                        n: {
+                            pattern: parseData.z || DEFAULT_NUMBER_FORMAT,
+                        },
+                    },
+                };
+            }
+        }
+
         return {
             v: value as Nullable<CellValue>,
             p: null,

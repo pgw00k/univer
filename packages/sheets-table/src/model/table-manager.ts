@@ -81,6 +81,8 @@ export class TableManager extends Disposable {
      * @param {string} subUnitId The subunit id of the table.
      * @param {string} name The table name, it should be unique in the unit or it will be appended with a number.
      * @param {ITableRange} range The range of the table, it contains the unit id and subunit id.
+     * @param {string[]} [header] The header of the table, if not provided, it will be generated based on the range.
+     * @param {string} [initId] The initial id of the table, if not provided, a random id will be generated.
      * @param {ITableOptions} [options] Other options of the table.
      * @returns {string} The table id.
      */
@@ -98,7 +100,18 @@ export class TableManager extends Disposable {
             range,
             tableName: name,
             tableId: id,
+            tableStyleId: options?.tableStyleId,
         });
+
+        if (options?.filters) {
+            const worksheet = this._univerInstanceService.getUnit<Workbook>(unitId)?.getSheetBySheetId(subUnitId);
+            table.getTableFilters().doFilter(worksheet!, range);
+            this._tableFilterChanged$.next({
+                unitId,
+                subUnitId,
+                tableId: id,
+            });
+        }
 
         return id;
     }
@@ -447,11 +460,24 @@ export class TableManager extends Disposable {
     }
 
     deleteUnitId(unitId: string) {
+        const unitMap = this._tableMap.get(unitId);
+        if (unitMap) {
+            unitMap.forEach((table) => table.dispose());
+        }
         this._tableMap.delete(unitId);
     }
 
     override dispose() {
         super.dispose();
+
+        this._tableAdd$.complete();
+        this._tableDelete$.complete();
+        this._tableNameChanged$.complete();
+        this._tableRangeChanged$.complete();
+        this._tableThemeChanged$.complete();
+        this._tableFilterChanged$.complete();
+        this._tableInitStatus.complete();
+
         this._tableMap.forEach((unitMap) => {
             unitMap.forEach((table) => table.dispose());
             unitMap.clear();

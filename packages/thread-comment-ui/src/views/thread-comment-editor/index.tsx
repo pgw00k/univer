@@ -17,7 +17,7 @@
 import type { IDocumentBody, IDocumentData, IUser } from '@univerjs/core';
 import type { Editor, IKeyboardEventConfig } from '@univerjs/docs-ui';
 import type { IThreadComment } from '@univerjs/thread-comment';
-import { BuildTextUtils, DOCS_NORMAL_EDITOR_UNIT_ID_KEY, ICommandService, LocaleService, Tools, UniverInstanceType } from '@univerjs/core';
+import { BuildTextUtils, DOCS_COMMENT_EDITOR_UNIT_ID_KEY, DOCS_NORMAL_EDITOR_UNIT_ID_KEY, ICommandService, LocaleService, Tools, UniverInstanceType } from '@univerjs/core';
 import { Button, clsx } from '@univerjs/design';
 import { BreakLineCommand, IEditorService, RichTextEditor } from '@univerjs/docs-ui';
 import { KeyCode, useDependency } from '@univerjs/ui';
@@ -54,7 +54,7 @@ export const ThreadCommentEditor = forwardRef<IThreadCommentEditorInstance, IThr
     const [editing, setEditing] = useState(false);
     const editorService = useDependency(IEditorService);
     const editor = useRef<Editor>(null);
-    const rootEditorId = type === UniverInstanceType.UNIVER_SHEET ? DOCS_NORMAL_EDITOR_UNIT_ID_KEY : unitId;
+    const rootEditorId = type === UniverInstanceType.UNIVER_DOC ? DOCS_NORMAL_EDITOR_UNIT_ID_KEY : unitId;
     const [canSubmit, setCanSubmit] = useState(() => BuildTextUtils.transform.getPlainText(editor.current?.getDocumentData().body?.dataStream ?? ''));
     useEffect(() => {
         setCanSubmit(BuildTextUtils.transform.getPlainText(editor.current?.getDocumentData().body?.dataStream ?? ''));
@@ -115,6 +115,7 @@ export const ThreadCommentEditor = forwardRef<IThreadCommentEditorInstance, IThr
             <RichTextEditor
                 className="univer-w-full"
                 editorRef={editor}
+                editorId={DOCS_COMMENT_EDITOR_UNIT_ID_KEY}
                 autoFocus={autoFocus}
                 keyboardEventConfig={keyboardEventConfig}
                 placeholder={localeService.t('threadCommentUI.editor.placeholder')}
@@ -165,7 +166,7 @@ export const ThreadCommentSuggestion = ({ active, user }: { active: boolean; use
         })}
     >
         <img
-            className="univer-mr-1.5 univer-h-6 univer-w-6 univer-rounded-full"
+            className="univer-mr-1.5 univer-size-6 univer-rounded-full"
             src={user.avatar}
             draggable={false}
         />

@@ -15,14 +15,54 @@
  */
 
 import type { AbsoluteRefType, BorderStyleTypes, BorderType, CellValue, CustomData, ICellData, IColorStyle, IDocumentData, IObjectMatrixPrimitiveType, IRange, IStyleData, ITextDecoration, Nullable, Workbook, Worksheet } from '@univerjs/core';
-import type { ISetBorderBasicCommandParams, ISetHorizontalTextAlignCommandParams, ISetRangeValuesCommandParams, ISetSelectionsOperationParams, ISetStyleCommandParams, ISetTextRotationCommandParams, ISetTextWrapCommandParams, ISetVerticalTextAlignCommandParams, IStyleTypeValue, SplitDelimiterEnum } from '@univerjs/sheets';
+import type {
+    IMergeCellsUtilOptions,
+    ISetBorderBasicCommandParams,
+    ISetHorizontalTextAlignCommandParams,
+    ISetRangeCustomMetadataCommandParams,
+    ISetRangeValuesCommandParams,
+    ISetSelectionsOperationParams,
+    ISetStyleCommandParams,
+    ISetTextRotationCommandParams,
+    ISetTextWrapCommandParams,
+    ISetVerticalTextAlignCommandParams,
+    IStyleTypeValue,
+    SplitDelimiterEnum,
+} from '@univerjs/sheets';
 import type { IFacadeClearOptions } from './f-worksheet';
 import type { FHorizontalAlignment, FVerticalAlignment } from './utils';
 import { BooleanNumber, covertCellValue, covertCellValues, DEFAULT_STYLES, Dimension, ICommandService, Inject, Injector, isNullCell, Rectangle, RichTextValue, TextStyleValue, WrapStrategy } from '@univerjs/core';
 import { FBaseInitialable } from '@univerjs/core/facade';
 import { FormulaDataModel, serializeRange, serializeRangeWithSheet } from '@univerjs/engine-formula';
-import { addMergeCellsUtil, ClearSelectionAllCommand, ClearSelectionContentCommand, ClearSelectionFormatCommand, DeleteRangeMoveLeftCommand, DeleteRangeMoveUpCommand, DeleteWorksheetRangeThemeStyleCommand, getAddMergeMutationRangeByType, getPrimaryForRange, InsertRangeMoveDownCommand, InsertRangeMoveRightCommand, RemoveWorksheetMergeCommand, SetBorderBasicCommand, SetHorizontalTextAlignCommand, SetRangeValuesCommand, SetSelectionsOperation, SetStyleCommand, SetTextRotationCommand, SetTextWrapCommand, SetVerticalTextAlignCommand, SetWorksheetRangeThemeStyleCommand, SheetRangeThemeService, SplitTextToColumnsCommand } from '@univerjs/sheets';
+import {
+    addMergeCellsUtil,
+    ClearSelectionAllCommand,
+    ClearSelectionContentCommand,
+    ClearSelectionFormatCommand,
+    DeleteRangeMoveLeftCommand,
+    DeleteRangeMoveUpCommand,
+    DeleteWorksheetRangeThemeStyleCommand,
+    getAddMergeMutationRangeByType,
+    getPrimaryForRange,
+    InsertRangeMoveDownCommand,
+    InsertRangeMoveRightCommand,
+    RemoveWorksheetMergeCommand,
+    SetBorderBasicCommand,
+    SetHorizontalTextAlignCommand,
+    SetRangeCustomMetadataCommand,
+    SetRangeValuesCommand,
+    SetSelectionsOperation,
+    SetStyleCommand,
+    SetTextRotationCommand,
+    SetTextWrapCommand,
+    SetVerticalTextAlignCommand,
+    SetWorksheetRangeThemeStyleCommand,
+    SheetRangeThemeService,
+    SplitTextToColumnsCommand,
+} from '@univerjs/sheets';
 import { FWorkbook } from './f-workbook';
+import { FWorksheet } from './f-worksheet';
+import { FRangePermission } from './permission/f-range-permission';
 import { transformCoreHorizontalAlignment, transformCoreVerticalAlignment, transformFacadeHorizontalAlignment, transformFacadeVerticalAlignment } from './utils';
 
 export type FontLine = 'none' | 'underline' | 'line-through';
@@ -45,6 +85,8 @@ export type GetStyleType = 'row' | 'col' | 'cell';
  * @hideconstructor
  */
 export class FRange extends FBaseInitialable {
+    static { this._enableManualInit(); }
+
     constructor(
         protected readonly _workbook: Workbook,
         protected readonly _worksheet: Worksheet,
@@ -54,6 +96,26 @@ export class FRange extends FBaseInitialable {
         @Inject(FormulaDataModel) protected readonly _formulaDataModel: FormulaDataModel
     ) {
         super(_injector);
+
+        const maxRows = this._worksheet.getRowCount();
+        const maxColumns = this._worksheet.getColumnCount();
+        if (
+            this._range.startRow < 0 ||
+            this._range.startColumn < 0 ||
+            this._range.endRow >= maxRows ||
+            this._range.endColumn >= maxColumns
+        ) {
+            throw new Error(`Range is out of bounds. Max rows: ${maxRows}, Max columns: ${maxColumns}, Given range: ${JSON.stringify(this._range)}`);
+        }
+
+        this._runInitializers(
+            this._injector,
+            this._workbook,
+            this._worksheet,
+            this._range,
+            this._commandService,
+            this._formulaDataModel
+        );
     }
 
     /**
@@ -922,9 +984,18 @@ export class FRange extends FBaseInitialable {
      * ```
      */
     setCustomMetaData(data: CustomData): FRange {
-        return this.setValue({
-            custom: data,
-        });
+        const params: ISetRangeCustomMetadataCommandParams = {
+            unitId: this._workbook.getUnitId(),
+            subUnitId: this._worksheet.getSheetId(),
+            range: this._range,
+            customMetadata: {
+                custom: data,
+            },
+        };
+
+        this._commandService.syncExecuteCommand(SetRangeCustomMetadataCommand.id, params);
+
+        return this;
     }
 
     /**
@@ -943,7 +1014,16 @@ export class FRange extends FBaseInitialable {
      * ```
      */
     setCustomMetaDatas(datas: CustomData[][]): FRange {
-        return this.setValues(datas.map((row) => row.map((data) => ({ custom: data }))));
+        const params: ISetRangeCustomMetadataCommandParams = {
+            unitId: this._workbook.getUnitId(),
+            subUnitId: this._worksheet.getSheetId(),
+            range: this._range,
+            customMetadata: datas.map((row) => row.map((data) => ({ custom: data }))),
+        };
+
+        this._commandService.syncExecuteCommand(SetRangeCustomMetadataCommand.id, params);
+
+        return this;
     }
 
     /**
@@ -1630,7 +1710,9 @@ export class FRange extends FBaseInitialable {
 
     /**
      * Merge cells in a range into one merged cell
-     * @param {boolean} [defaultMerge] - If true, only the value in the upper left cell is retained.
+     * @param {IMergeCellsUtilOptions} [options] - The options for merging cells.
+     * @param {boolean} [options.defaultMerge] - If true, only the value in the upper left cell is retained. If false, a confirm dialog will be shown to the user. Default is true.
+     * @param {boolean} [options.isForceMerge] - If true, the overlapping merged cells will be removed before performing the new merge. Default is false.
      * @returns {FRange} This range, for chaining
      * @example
      * ```ts
@@ -1640,19 +1722,29 @@ export class FRange extends FBaseInitialable {
      * fRange.merge();
      * console.log(fRange.isMerged());
      * ```
+     *
+     * ```ts
+     * const fWorkbook = univerAPI.getActiveWorkbook();
+     * const fWorksheet = fWorkbook.getActiveSheet();
+     * const fRange = fWorksheet.getRange('B1:C2');
+     * // Assume A1:B2 is already merged.
+     * fRange.merge({ isForceMerge: true });
+     * ```
      */
-    merge(defaultMerge: boolean = true): FRange {
+    merge(options?: IMergeCellsUtilOptions): FRange {
         const unitId = this._workbook.getUnitId();
         const subUnitId = this._worksheet.getSheetId();
 
-        addMergeCellsUtil(this._injector, unitId, subUnitId, [this._range], defaultMerge);
+        addMergeCellsUtil(this._injector, unitId, subUnitId, [this._range], options);
 
         return this;
     }
 
     /**
      * Merges cells in a range horizontally.
-     * @param {boolean} [defaultMerge] - If true, only the value in the upper left cell is retained.
+     * @param {IMergeCellsUtilOptions} [options] - The options for merging cells.
+     * @param {boolean} [options.defaultMerge] - If true, only the value in the upper left cell is retained. If false, a confirm dialog will be shown to the user. Default is true.
+     * @param {boolean} [options.isForceMerge] - If true, the overlapping merged cells will be removed before performing the new merge. Default is false.
      * @returns {FRange} This range, for chaining
      * @example
      * ```ts
@@ -1667,20 +1759,30 @@ export class FRange extends FBaseInitialable {
      *   console.log(item.getA1Notation());
      * });
      * ```
+     *
+     * ```ts
+     * const fWorkbook = univerAPI.getActiveWorkbook();
+     * const fWorksheet = fWorkbook.getActiveSheet();
+     * const fRange = fWorksheet.getRange('B1:C2');
+     * // Assume A1:B2 is already merged.
+     * fRange.mergeAcross({ isForceMerge: true });
+     * ```
      */
-    mergeAcross(defaultMerge: boolean = true): FRange {
+    mergeAcross(options?: IMergeCellsUtilOptions): FRange {
         const ranges = getAddMergeMutationRangeByType([this._range], Dimension.ROWS);
         const unitId = this._workbook.getUnitId();
         const subUnitId = this._worksheet.getSheetId();
 
-        addMergeCellsUtil(this._injector, unitId, subUnitId, ranges, defaultMerge);
+        addMergeCellsUtil(this._injector, unitId, subUnitId, ranges, options);
 
         return this;
     }
 
     /**
      * Merges cells in a range vertically.
-     * @param {boolean} [defaultMerge] - If true, only the value in the upper left cell is retained.
+     * @param {IMergeCellsUtilOptions} [options] - The options for merging cells.
+     * @param {boolean} [options.defaultMerge] - If true, only the value in the upper left cell is retained. If false, a confirm dialog will be shown to the user. Default is true.
+     * @param {boolean} [options.isForceMerge] - If true, the overlapping merged cells will be removed before performing the new merge. Default is false.
      * @returns {FRange} This range, for chaining
      * @example
      * ```ts
@@ -1695,13 +1797,21 @@ export class FRange extends FBaseInitialable {
      *   console.log(item.getA1Notation());
      * });
      * ```
+     *
+     * ```ts
+     * const fWorkbook = univerAPI.getActiveWorkbook();
+     * const fWorksheet = fWorkbook.getActiveSheet();
+     * const fRange = fWorksheet.getRange('B1:C2');
+     * // Assume A1:B2 is already merged.
+     * fRange.mergeVertically({ isForceMerge: true });
+     * ```
      */
-    mergeVertically(defaultMerge: boolean = true): FRange {
+    mergeVertically(options?: IMergeCellsUtilOptions): FRange {
         const ranges = getAddMergeMutationRangeByType([this._range], Dimension.COLUMNS);
         const unitId = this._workbook.getUnitId();
         const subUnitId = this._worksheet.getSheetId();
 
-        addMergeCellsUtil(this._injector, unitId, subUnitId, ranges, defaultMerge);
+        addMergeCellsUtil(this._injector, unitId, subUnitId, ranges, options);
 
         return this;
     }
@@ -1740,7 +1850,11 @@ export class FRange extends FBaseInitialable {
      * ```
      */
     breakApart(): FRange {
-        this._commandService.syncExecuteCommand(RemoveWorksheetMergeCommand.id, { ranges: [this._range] });
+        this._commandService.syncExecuteCommand(RemoveWorksheetMergeCommand.id, {
+            unitId: this._workbook.getUnitId(),
+            subUnitId: this._worksheet.getSheetId(),
+            ranges: [this._range],
+        });
         return this;
     }
 
@@ -2559,5 +2673,45 @@ export class FRange extends FBaseInitialable {
      */
     setFormulas(formulas: string[][]): FRange {
         return this.setValues(formulas.map((row) => row.map((formula) => ({ f: formula }))));
+    }
+
+    /**
+     * Get the RangePermission instance for managing range-level permissions.
+     * This is the new permission API that provides range-specific permission control.
+     * @returns {FRangePermission} - The RangePermission instance.
+     * @example
+     * ```ts
+     * const fWorksheet = univerAPI.getActiveWorkbook().getActiveSheet();
+     * const fRange = fWorksheet.getRange('A1:B10');
+     * const permission = fRange.getRangePermission();
+     *
+     * // Protect the range
+     * await permission.protect({ name: 'Protected Area', allowEdit: false });
+     *
+     * // Check if range is protected
+     * const isProtected = permission.isProtected();
+     *
+     * // Check if current user can edit
+     * const canEdit = permission.canEdit();
+     *
+     * // Unprotect the range
+     * await permission.unprotect();
+     *
+     * // Subscribe to protection changes
+     * permission.protectionChange$.subscribe(change => {
+     *   console.log('Protection changed:', change);
+     * });
+     * ```
+     */
+    getRangePermission(): FRangePermission {
+        const fWorksheet = this._injector.createInstance(FWorksheet, this._injector.createInstance(FWorkbook, this._workbook), this._workbook, this._worksheet);
+
+        return this._injector.createInstance(
+            FRangePermission,
+            this._workbook.getUnitId(),
+            this._worksheet.getSheetId(),
+            this,
+            fWorksheet
+        );
     }
 }

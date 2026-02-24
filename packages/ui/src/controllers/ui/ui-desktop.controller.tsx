@@ -77,6 +77,11 @@ export class DesktopUIController extends SingleUnitUIController {
         });
     }
 
+    override dispose(): void {
+        super.dispose();
+        this._componentManager.dispose();
+    }
+
     override bootstrap(callback: (contentElement: HTMLElement, containerElement: HTMLElement) => void): IDisposable {
         return bootstrap(this._injector, this._config, callback);
     }
@@ -127,9 +132,10 @@ function bootstrap(
 
     return toDisposable(() => {
         // https://github.com/facebook/react/issues/26031
-        createRoot(<div />, mountContainer);
-        setTimeout(() => createRoot(<div />, mountContainer), 200);
-        setTimeout(() => unmount(mountContainer), 500);
+        // createRoot(<div />, mountContainer);
+        // setTimeout(() => createRoot(<div />, mountContainer), 200);
+        // setTimeout(() => unmount(mountContainer), 500);
+        unmount(mountContainer);
     });
 }
 

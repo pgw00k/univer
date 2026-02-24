@@ -29,7 +29,6 @@ import type {
     IRuleConfirmedData,
     ISheetAutoFillHook,
 } from '../services/auto-fill/type';
-import type { IDiscreteRange } from './utils/range-tools';
 import {
     Direction,
     Disposable,
@@ -276,24 +275,23 @@ export class AutoFillController extends Disposable {
             return source;
         }
         const matrix = worksheet.getCellMatrix();
-        const maxRow = worksheet.getMaxRows() - 1;
-        const maxColumn = worksheet.getMaxColumns() - 1;
-        let detectEndRow = endRow;
+        const maxRow = worksheet.getMaxRows();
+        const maxColumn = worksheet.getMaxColumns();
+        let detectEndRow = endRow + 1;
         // left column first, or consider right column.
-        if (startColumn > 0 && matrix.getValue(startRow, startColumn - 1)?.v != null) {
-            let cur = startRow;
-            while (matrix.getValue(cur, startColumn - 1)?.v != null && cur < maxRow) {
-                cur += 1;
+        if (startColumn > 0 && matrix.getValue(detectEndRow, startColumn - 1)?.v != null) {
+            while (matrix.getValue(detectEndRow + 1, startColumn - 1)?.v != null && detectEndRow < maxRow) {
+                detectEndRow += 1;
             }
-            detectEndRow = cur - 1;
-        } else if (endColumn < maxColumn && matrix.getValue(endRow, endColumn + 1)?.v != null) {
-            let cur = startRow;
-            while (matrix.getValue(cur, endColumn + 1)?.v != null && cur < maxRow) {
-                cur += 1;
+        } else if (endColumn < maxColumn - 1 && matrix.getValue(detectEndRow, endColumn + 1)?.v != null) {
+            while (matrix.getValue(detectEndRow + 1, endColumn + 1)?.v != null && detectEndRow < maxRow) {
+                detectEndRow += 1;
             }
-            detectEndRow = cur - 1;
+        } else {
+            detectEndRow = endRow;
         }
 
+        // If the fill range contains data, stop filling at the first row of data.
         for (let i = endRow + 1; i <= detectEndRow; i++) {
             for (let j = startColumn; j <= endColumn; j++) {
                 if (matrix.getValue(i, j)?.v != null) {
@@ -424,13 +422,12 @@ export class AutoFillController extends Disposable {
         }
     }
 
-    private _getCopyData(source: IDiscreteRange, direction: Direction) {
-        const worksheet = this._univerInstanceService
-            .getCurrentUnitForType<Workbook>(UniverInstanceType.UNIVER_SHEET)!
-            .getActiveSheet();
+    private _getCopyData(location: IAutoFillLocation, direction: Direction) {
+        const { unitId, subUnitId, source } = location;
+        const worksheet = this._univerInstanceService.getUnit<Workbook>(unitId)?.getSheetBySheetId(subUnitId);
 
         if (!worksheet) {
-            throw new Error('No active sheet found');
+            throw new Error('No worksheet found');
         }
 
         const currentCellDatas = worksheet.getCellMatrix();
@@ -501,8 +498,9 @@ export class AutoFillController extends Disposable {
         return copyDataPiece;
     }
 
-    private _getMergeApplyData(source: IRange, target: IRange, direction: Direction, csLen: number) {
-        const worksheet = this._univerInstanceService.getCurrentUnitForType<Workbook>(UniverInstanceType.UNIVER_SHEET)!.getActiveSheet();
+    private _getMergeApplyData(source: IRange, target: IRange, direction: Direction, csLen: number, location: IAutoFillLocation) {
+        const { unitId, subUnitId } = location;
+        const worksheet = this._univerInstanceService.getUnit<Workbook>(unitId)?.getSheetBySheetId(subUnitId);
 
         if (!worksheet) {
             throw new Error('No active sheet found');
@@ -573,11 +571,9 @@ export class AutoFillController extends Disposable {
     }
 
     private _presetAndCacheData(location: IAutoFillLocation, direction: Direction) {
-        const { source, target } = location;
+        const { unitId, subUnitId, target } = location;
         // cache original data of apply range
-        const worksheet = this._univerInstanceService
-            .getCurrentUnitForType<Workbook>(UniverInstanceType.UNIVER_SHEET)!
-            .getActiveSheet();
+        const worksheet = this._univerInstanceService.getUnit<Workbook>(unitId)?.getSheetBySheetId(subUnitId);
 
         if (!worksheet) {
             throw new Error('No active sheet found');
@@ -594,7 +590,7 @@ export class AutoFillController extends Disposable {
             applyData.push(row);
         });
         this._beforeApplyData = applyData;
-        this._copyData = this._getCopyData(source, direction);
+        this._copyData = this._getCopyData(location, direction);
         this._currentLocation = location;
         if (this._shouldDisableSeries(this._copyData)) {
             this._autoFillService.setDisableApplyType(APPLY_TYPE.SERIES, true);
@@ -680,9 +676,9 @@ export class AutoFillController extends Disposable {
 
         // deal with styles
         let applyMergeRanges: IRange[] = [];
-        const style = this._univerInstanceService.getCurrentUnitForType<Workbook>(UniverInstanceType.UNIVER_SHEET)!.getStyles();
+        const style = this._univerInstanceService.getUnit<Workbook>(unitId)?.getStyles();
         if (hasStyle) {
-            applyMergeRanges = this._getMergeApplyData(sourceRange, targetRange, direction, csLen);
+            applyMergeRanges = this._getMergeApplyData(sourceRange, targetRange, direction, csLen, location);
             applyDatas.forEach((row) => {
                 row.forEach((cellData) => {
                     if (cellData && style) {

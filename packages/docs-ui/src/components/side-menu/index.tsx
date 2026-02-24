@@ -46,7 +46,7 @@ export interface ISideMenuInstance {
     scrollTo: (id: string) => void;
 }
 
-const commonClass = 'univer-overflow-hidden univer-font-[500] univer-truncate univer-h-[24px] univer-mb-2 univer-leading-[24px] univer-ellipsis univer-cursor-pointer';
+const commonClass = 'univer-font-[500] univer-truncate univer-h-[24px] univer-mb-2 univer-leading-[24px] univer-cursor-pointer univer-pr-1 ';
 const titleClass = 'univer-text-base univer-font-semibold';
 const h1Class = 'univer-text-sm univer-font-semibold';
 const textClass = 'univer-text-sm';
@@ -97,7 +97,7 @@ export const SideMenu = forwardRef<ISideMenuInstance, ISideMenuProps>((props, re
             <div
                 onClick={() => onOpenChange?.(!open)}
                 className={clsx(`
-                  univer-absolute univer-left-5 univer-top-4 univer-z-[100] univer-flex univer-h-8 univer-w-8
+                  univer-absolute univer-left-5 univer-top-4 univer-z-[100] univer-flex univer-size-8
                   univer-cursor-pointer univer-items-center univer-justify-center univer-rounded-full univer-bg-white
                   univer-text-gray-800 univer-shadow-sm
                   dark:!univer-bg-gray-600 dark:!univer-text-gray-200

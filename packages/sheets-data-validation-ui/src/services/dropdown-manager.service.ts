@@ -51,6 +51,9 @@ const transformDate = (value: Nullable<CellValue>) => {
         return undefined;
     }
 
+    // If the value is an empty string, return the current date
+    if (value === '') return dayjs();
+
     if (typeof value === 'number' || !Number.isNaN(+value)) {
         return dayjs(numfmt.format('yyyy-MM-dd HH:mm:ss', Number(value)));
     }
@@ -360,6 +363,7 @@ export class DataValidationDropdownManagerService extends Disposable {
                         defaultValue: cellStr,
                         multiple,
                         showEdit: this._configService.getConfig<IUniverSheetsDataValidationUIConfig>(SHEETS_DATA_VALIDATION_UI_PLUGIN_CONFIG_KEY)?.showEditOnDropdown ?? true,
+                        showSearch: this._configService.getConfig<IUniverSheetsDataValidationUIConfig>(SHEETS_DATA_VALIDATION_UI_PLUGIN_CONFIG_KEY)?.showSearchOnDropdown ?? true,
                     },
                 };
                 break;

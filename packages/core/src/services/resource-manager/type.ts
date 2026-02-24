@@ -39,14 +39,10 @@ export interface IResourceManagerService {
     disposePluginResource: (pluginName: IResourceName) => void;
     getAllResourceHooks: () => IResourceHook[];
 
-    /**
-     * @deprecated You should get resource with type specified.
-     */
-    getResources(unitId: string): IResources;
     getResources(unitId: string, type: UniverInstanceType): IResources;
     getResourcesByType: (unitId: string, type: UniverInstanceType) => IResources;
     loadResources: (unitId: string, resources?: IResources) => void;
-    unloadResources(unitId: string): void;
+    unloadResources(unitId: string, type: UniverInstanceType): void;
 }
 
 export const IResourceManagerService = createIdentifier<IResourceManagerService>('core.resource-manager.service');

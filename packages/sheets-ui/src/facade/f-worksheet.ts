@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-import type { IDisposable, IRange, Nullable } from '@univerjs/core';
+import type { IDisposable, IRange, ISelectionCell, Nullable } from '@univerjs/core';
 import type { IColumnsHeaderCfgParam, IRowsHeaderCfgParam, RenderComponentType, RenderManagerService, SpreadsheetColumnHeader, SpreadsheetRowHeader, SpreadsheetSkeleton } from '@univerjs/engine-render';
 
+import type { ISelectionStyle } from '@univerjs/sheets';
 import type { IScrollState, IViewportScrollState } from '@univerjs/sheets-ui';
+import type { FRange } from '@univerjs/sheets/facade';
 import { ICommandService, toDisposable } from '@univerjs/core';
-import { IRenderManagerService, SHEET_VIEWPORT_KEY, sheetContentViewportKeys } from '@univerjs/engine-render';
+import { IRenderManagerService, SHEET_VIEWPORT_KEY } from '@univerjs/engine-render';
 import { SetWorksheetRowIsAutoHeightCommand } from '@univerjs/sheets';
-import { SetColumnHeaderHeightCommand, SetRowHeaderWidthCommand, SetWorksheetColAutoWidthCommand, SetZoomRatioCommand, SHEET_VIEW_KEY, SheetScrollManagerService, SheetSkeletonManagerService, SheetsScrollRenderController } from '@univerjs/sheets-ui';
+import { IMarkSelectionService, SetColumnHeaderHeightCommand, SetRowHeaderWidthCommand, SetWorksheetColAutoWidthCommand, SetZoomRatioCommand, SHEET_VIEW_KEY, SheetScrollManagerService, SheetSkeletonManagerService, SheetsScrollRenderController } from '@univerjs/sheets-ui';
 import { FWorksheet } from '@univerjs/sheets/facade';
 
 /**
@@ -39,6 +41,25 @@ export interface IFWorksheetSkeletonMixin {
      * ```
      */
     refreshCanvas(): FWorksheet;
+
+    /**
+     * Highlight multiple ranges on the worksheet.
+     * @param {FRange[]} ranges  The ranges to highlight.
+     * @param {Nullable<Partial<ISelectionStyle>>} style - style for highlight ranges.
+     * @param {Nullable<ISelectionCell>} primary - primary cell for highlight ranges.
+     * @return {IDisposable} An IDisposable to remove the highlights.
+     * @example
+     * ```ts
+     * const fWorkbook = univerAPI.getActiveWorkbook();
+     * const fWorksheet = fWorkbook.getActiveSheet();
+     * const ranges = [fWorksheet.getRange('A1:B2'), fWorksheet.getRange('D4:E5')];
+     * const disposable = fWorksheet.highlightRanges(ranges, { fill: 'yellow' });
+     *
+     * // To remove the highlights later
+     * disposable.dispose();
+     * ```
+     */
+    highlightRanges(ranges: FRange[], style?: Nullable<Partial<ISelectionStyle>>, primary?: Nullable<ISelectionCell>): IDisposable;
 
     /**
      * Set zoom ratio of the worksheet.
@@ -71,7 +92,7 @@ export interface IFWorksheetSkeletonMixin {
     getZoom(): number;
 
     /**
-     * Return visible range, sum view range of 4 viewports.
+     * Get visible range of main viewport.
      * @returns {IRange} - visible range
      * @example
      * ```ts
@@ -82,13 +103,29 @@ export interface IFWorksheetSkeletonMixin {
      * console.log(fWorksheet.getRange(visibleRange).getA1Notation());
      * ```
      */
-    getVisibleRange(): IRange;
+    getVisibleRange(): IRange | null;
+
+    /**
+     * Get visible ranges of all viewports.
+     * @returns {Record<SHEET_VIEWPORT_KEY, IRange>} - visible ranges of all viewports
+     * @example
+     * ```ts
+     * const fWorkbook = univerAPI.getActiveWorkbook();
+     * const fWorksheet = fWorkbook.getActiveSheet();
+     * const visibleRanges = fWorksheet.getVisibleRangesOfAllViewports();
+     * console.log(visibleRanges);
+     * const mainLeftTopViewportRange = visibleRanges?.get(univerAPI.Enum.SHEET_VIEWPORT_KEY.VIEW_MAIN_LEFT_TOP);
+     * console.log(fWorksheet.getRange(mainLeftTopViewportRange).getA1Notation());
+     * ```
+     */
+    getVisibleRangesOfAllViewports(): Map<SHEET_VIEWPORT_KEY, IRange> | null;
 
     /**
      * Scroll spreadsheet(viewMain) to cell position. Make the cell at topleft of current viewport.
      * Based on the limitations of viewport and the number of rows and columns, you can only scroll to the maximum scrollable range.
      * @param {number} row - Cell row index
      * @param {number} column - Cell column index
+     * @param {number} [duration] - The duration of the scroll animation in milliseconds.
      * @returns {FWorksheet} - The FWorksheet instance for chaining.
      * @example
      * ```ts
@@ -102,7 +139,7 @@ export interface IFWorksheetSkeletonMixin {
      * fWorksheet.scrollToCell(row, column);
      * ```
      */
-    scrollToCell(row: number, column: number): FWorksheet;
+    scrollToCell(row: number, column: number, duration?: number): FWorksheet;
 
     /**
      * Get scroll state of current sheet.
@@ -308,6 +345,28 @@ export class FWorksheetSkeletonMixin extends FWorksheet implements IFWorksheetSk
         return this;
     }
 
+    override highlightRanges(ranges: FRange[], style?: Nullable<Partial<ISelectionStyle>>, primary?: Nullable<ISelectionCell>): IDisposable {
+        const markSelectionService = this._injector.get(IMarkSelectionService);
+        const ids: string[] = [];
+        for (const range of ranges) {
+            const iRange = range.getRange();
+            const id = markSelectionService.addShapeWithNoFresh({ range: iRange, style, primary });
+            if (id) {
+                ids.push(id);
+            }
+        }
+        markSelectionService.refreshShapes();
+
+        if (ids.length === 0) {
+            throw new Error('Failed to highlight current range');
+        }
+        return toDisposable(() => {
+            ids.forEach((id) => {
+                markSelectionService.removeShape(id);
+            });
+        });
+    }
+
     override zoom(zoomRatio: number): FWorksheet {
         const commandService = this._injector.get(ICommandService);
         const _zoomRatio = Math.min(Math.max(zoomRatio, 0.1), 4);
@@ -323,42 +382,35 @@ export class FWorksheetSkeletonMixin extends FWorksheet implements IFWorksheetSk
         return this._worksheet.getZoomRatio();
     }
 
-    override getVisibleRange(): IRange {
+    override getVisibleRange(): IRange | null {
         const unitId = this._workbook.getUnitId();
         const renderManagerService = this._injector.get(IRenderManagerService);
         const render = renderManagerService.getRenderById(unitId);
-        let range: IRange = {
-            startColumn: 0,
-            startRow: 0,
-            endColumn: 0,
-            endRow: 0,
-        };
-        if (!render) return range;
+        if (!render) return null;
         const skm = render.with(SheetSkeletonManagerService);
         const sk = skm.getCurrentSkeleton();
-        if (!sk) return range;
-        const visibleRangeMap = sk?.getVisibleRanges();
-        if (!visibleRangeMap) return range;
-
-        range = sk.getVisibleRangeByViewport(SHEET_VIEWPORT_KEY.VIEW_MAIN) as IRange;
-        for (const [k, r] of visibleRangeMap) {
-            if (sheetContentViewportKeys.indexOf(k) === -1) continue;
-            range.startColumn = Math.min(range.startColumn, r.startColumn);
-            range.startRow = Math.min(range.startRow, r.startRow);
-            range.endColumn = Math.max(range.endColumn, r.endColumn);
-            range.endRow = Math.max(range.endRow, r.endRow);
-        }
-
-        return range;
+        if (!sk) return null;
+        return sk.getVisibleRangeByViewport(SHEET_VIEWPORT_KEY.VIEW_MAIN) as IRange;
     }
 
-    override scrollToCell(row: number, column: number): FWorksheet {
+    override getVisibleRangesOfAllViewports(): Map<SHEET_VIEWPORT_KEY, IRange> | null {
+        const unitId = this._workbook.getUnitId();
+        const renderManagerService = this._injector.get(IRenderManagerService);
+        const render = renderManagerService.getRenderById(unitId);
+        if (!render) return null;
+        const skm = render.with(SheetSkeletonManagerService);
+        const sk = skm.getCurrentSkeleton();
+        if (!sk) return null;
+        return sk.getVisibleRanges();
+    }
+
+    override scrollToCell(row: number, column: number, duration?: number): FWorksheet {
         const unitId = this._workbook.getUnitId();
         const renderManagerService = this._injector.get(IRenderManagerService);
         const render = renderManagerService.getRenderById(unitId);
         if (render) {
             const scrollRenderController = render?.with(SheetsScrollRenderController);
-            scrollRenderController.scrollToCell(row, column);
+            scrollRenderController.scrollToCell(row, column, duration);
         }
         return this;
     }

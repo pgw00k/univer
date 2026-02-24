@@ -86,8 +86,8 @@ export function FilterByValue(props: { model: ByValuesModel }) {
                     <div
                         data-u-comp="sheets-filter-panel-values-item-inner"
                         className={`
-                          univer-box-border univer-flex univer-h-7 univer-items-center univer-rounded-md univer-pb-0
-                          univer-pl-5 univer-pr-0.5 univer-pt-0 univer-text-sm
+                          univer-box-border univer-flex univer-h-7 univer-items-center univer-rounded-md univer-py-0
+                          univer-pl-5 univer-pr-0.5 univer-text-sm
                         `}
                     >
                         <Checkbox
@@ -99,8 +99,7 @@ export function FilterByValue(props: { model: ByValuesModel }) {
                         <span
                             data-u-comp="sheets-filter-panel-values-item-text"
                             className={`
-                              univer-mx-1 univer-inline-block univer-flex-shrink univer-overflow-hidden
-                              univer-text-ellipsis univer-whitespace-nowrap univer-text-gray-900
+                              univer-mx-1 univer-inline-block univer-flex-shrink univer-truncate univer-text-gray-900
                               dark:!univer-text-white
                             `}
                         >

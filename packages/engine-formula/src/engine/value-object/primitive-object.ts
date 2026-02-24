@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { isRealNum } from '@univerjs/core';
+import { getNumfmtParseValueFilter, isRealNum, numfmt, Tools } from '@univerjs/core';
 import { FormulaAstLRU } from '../../basics/cache-lru';
 import { reverseCompareOperator } from '../../basics/calculate';
 import { BooleanValue, ConcatenateType } from '../../basics/common';
@@ -478,7 +478,12 @@ export class NumberValueObject extends BaseValueObject {
             return valueObject.plus(this);
         }
 
-        let object = this.plusBy(valueObject.getValue());
+        let _valueObject = valueObject;
+        if (!valueObject.isNumber()) {
+            _valueObject = valueObject.convertToNumberObjectValue();
+        }
+
+        let object = this.plusBy(_valueObject.getValue());
 
         // = 1 + #NAME? gets #NAME?, = 1 + #VALUE! gets #VALUE!
         if (object.isError()) {
@@ -486,7 +491,7 @@ export class NumberValueObject extends BaseValueObject {
         }
 
         // Set number format
-        const pattern = comparePatternPriority(this.getPattern(), valueObject.getPattern(), operatorToken.PLUS);
+        const pattern = comparePatternPriority(this.getPattern(), _valueObject.getPattern(), operatorToken.PLUS);
         object = NumberValueObject.create(Number(object.getValue()), pattern);
 
         return object;
@@ -504,7 +509,13 @@ export class NumberValueObject extends BaseValueObject {
             }
             return (o as BaseValueObject).plus(this);
         }
-        let object = this.minusBy(valueObject.getValue());
+
+        let _valueObject = valueObject;
+        if (!valueObject.isNumber()) {
+            _valueObject = valueObject.convertToNumberObjectValue();
+        }
+
+        let object = this.minusBy(_valueObject.getValue());
 
         // = 1 - #NAME? gets #NAME?, = 1 - #VALUE! gets #VALUE!
         if (object.isError()) {
@@ -512,7 +523,7 @@ export class NumberValueObject extends BaseValueObject {
         }
 
         // Set number format
-        const pattern = comparePatternPriority(this.getPattern(), valueObject.getPattern(), operatorToken.MINUS);
+        const pattern = comparePatternPriority(this.getPattern(), _valueObject.getPattern(), operatorToken.MINUS);
         object = NumberValueObject.create(Number(object.getValue()), pattern);
 
         return object;
@@ -522,7 +533,13 @@ export class NumberValueObject extends BaseValueObject {
         if (valueObject.isArray()) {
             return valueObject.multiply(this);
         }
-        let object = this.multiplyBy(valueObject.getValue());
+
+        let _valueObject = valueObject;
+        if (!valueObject.isNumber()) {
+            _valueObject = valueObject.convertToNumberObjectValue();
+        }
+
+        let object = this.multiplyBy(_valueObject.getValue());
 
         // = 1 * #NAME? gets #NAME?, = 1 * #VALUE! gets #VALUE!
         if (object.isError()) {
@@ -530,7 +547,7 @@ export class NumberValueObject extends BaseValueObject {
         }
 
         // Set number format
-        const pattern = comparePatternPriority(this.getPattern(), valueObject.getPattern(), operatorToken.MULTIPLY);
+        const pattern = comparePatternPriority(this.getPattern(), _valueObject.getPattern(), operatorToken.MULTIPLY);
         object = NumberValueObject.create(Number(object.getValue()), pattern);
 
         return object;
@@ -544,7 +561,13 @@ export class NumberValueObject extends BaseValueObject {
             }
             return (o as BaseValueObject).multiply(this);
         }
-        let object = this.dividedBy(valueObject.getValue());
+
+        let _valueObject = valueObject;
+        if (!valueObject.isNumber()) {
+            _valueObject = valueObject.convertToNumberObjectValue();
+        }
+
+        let object = this.dividedBy(_valueObject.getValue());
 
         // = 1 / #NAME? gets #NAME?, = 1 / #VALUE! gets #VALUE!
         if (object.isError()) {
@@ -552,7 +575,7 @@ export class NumberValueObject extends BaseValueObject {
         }
 
         // Set number format
-        const pattern = comparePatternPriority(this.getPattern(), valueObject.getPattern(), operatorToken.DIVIDED);
+        const pattern = comparePatternPriority(this.getPattern(), _valueObject.getPattern(), operatorToken.DIVIDED);
         object = NumberValueObject.create(Number(object.getValue()), pattern);
 
         return object;
@@ -622,11 +645,22 @@ export class NumberValueObject extends BaseValueObject {
         return StringValueObject.create(this.concatenate(valueObject.getValue(), ConcatenateType.BACK));
     }
 
+    override isDateFormat(): boolean {
+        const pattern = this.getPattern();
+        return numfmt.isDateFormat(pattern);
+    }
+
     override compare(valueObject: BaseValueObject, operator: compareToken): BaseValueObject {
         if (valueObject.isArray()) {
             return valueObject.compare(this, reverseCompareOperator(operator));
         }
-        return this.compareBy(valueObject.getValue(), operator);
+
+        let isDateCompare = false;
+        if (valueObject.isDateFormat() && this.isDateFormat()) {
+            isDateCompare = true;
+        }
+
+        return this.compareBy(valueObject.getValue(), operator, isDateCompare);
     }
 
     override plusBy(value: string | number | boolean): BaseValueObject {
@@ -733,9 +767,21 @@ export class NumberValueObject extends BaseValueObject {
         return NumberValueObject.create(result);
     }
 
-    override compareBy(value: string | number | boolean, operator: compareToken): BaseValueObject {
-        const currentValue = this.getValue();
+    override compareBy(valueRaw: string | number | boolean, operator: compareToken, isDateCompare: boolean = false): BaseValueObject {
+        const currentValueRaw = this.getValue();
         let result = false;
+
+        let currentValue = currentValueRaw;
+        let value = valueRaw;
+
+        /**
+         * When comparing dates, round to 6 decimal places to avoid precision issues
+         * e.g. 44561.99999999999 and 44562 both represent the date 2022-01-01
+         */
+        if (isDateCompare) {
+            currentValue = Math.round(currentValueRaw * 1e8) / 1e8;
+            value = Math.round((valueRaw as number) * 1e8) / 1e8;
+        }
 
         if (typeof value === 'string') {
             result = this._compareString(operator);
@@ -1314,9 +1360,28 @@ export class NumberValueObject extends BaseValueObject {
     }
 }
 
-interface IStringValueObjectOptions {
+export interface IImageFormulaInfo {
+    source: string;
+    altText: string;
+    sizing: number;
+    height: number;
+    width: number;
+    isErrorImage?: boolean;
+    imageNaturalHeight?: number;
+    imageNaturalWidth?: number;
+}
+
+export interface IStringValueObjectOptions {
+    /**
+     * Whether it is a hyperlink value from HYPERLINK function
+     */
     isHyperlink?: boolean;
     hyperlinkUrl?: string;
+    /**
+     * Whether it is an image value from IMAGE function
+     */
+    isImage?: boolean;
+    imageInfo?: IImageFormulaInfo;
 }
 
 const STRING_CACHE_LRU_COUNT = 100000;
@@ -1326,6 +1391,8 @@ export class StringValueObject extends BaseValueObject {
     private _value: string;
     private _isHyperlink: boolean = false;
     private _hyperlinkUrl: string = '';
+    private _isImage: boolean = false;
+    private _imageInfo: IStringValueObjectOptions['imageInfo'];
 
     static create(value: string, options?: IStringValueObjectOptions) {
         const cached = StringValueObjectCache.get(value);
@@ -1337,6 +1404,10 @@ export class StringValueObject extends BaseValueObject {
             instance._isHyperlink = options.isHyperlink;
             instance._hyperlinkUrl = options.hyperlinkUrl ?? '';
         }
+        if (options?.isImage) {
+            instance._isImage = options.isImage;
+            instance._imageInfo = options.imageInfo;
+        }
         StringValueObjectCache.set(value, instance);
         return instance;
     }
@@ -1347,6 +1418,14 @@ export class StringValueObject extends BaseValueObject {
         }
 
         if (cached.getHyperlinkUrl() !== options.hyperlinkUrl) {
+            return false;
+        }
+
+        if (cached.isImage() !== options.isImage) {
+            return false;
+        }
+
+        if (!Tools.diffValue(cached.getImageInfo(), options.imageInfo)) {
             return false;
         }
 
@@ -1372,6 +1451,14 @@ export class StringValueObject extends BaseValueObject {
 
     getHyperlinkUrl(): string {
         return this._hyperlinkUrl;
+    }
+
+    override isImage(): boolean {
+        return this._isImage;
+    }
+
+    getImageInfo(): IStringValueObjectOptions['imageInfo'] {
+        return this._imageInfo;
     }
 
     override concatenateFront(valueObject: BaseValueObject): BaseValueObject {
@@ -1487,7 +1574,14 @@ export class StringValueObject extends BaseValueObject {
     }
 
     override convertToNumberObjectValue() {
-        return createNumberValueObjectByRawValue(this.getValue());
+        const rawValue = this.getValue();
+        const parseData = getNumfmtParseValueFilter(rawValue);
+
+        if (parseData && parseData.z) {
+            return createNumberValueObjectByRawValue(parseData.v, parseData.z);
+        }
+
+        return createNumberValueObjectByRawValue(rawValue);
     }
 
     override convertToBooleanObjectValue() {

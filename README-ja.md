@@ -5,7 +5,7 @@
     <img src="./docs/img/banner-dark.png" alt="Univer" width="400" />
 </picture>
 
-Univer は、開発者に強力で柔軟かつ使いやすいオフィススイートソリューションを提供することを目的としたオープンソースのオフィススイートエンジンです。スプレッドシート、ドキュメント、スライドなど、さまざまなタイプのドキュメントをサポートし、豊富な機能と高い拡張性を提供します。<br />
+Univer は、開発者に強力で柔軟かつ使いやすいオフィススイートソリューションを提供することを目的としたオープンソースのオフィススイートエンジンです。スプレッドシートの作成と編集に特化しており、豊富な機能と高い拡張性を提供します。<br />
 **拡張可能・組み込み可能・高性能**
 
 > 日本語の開発ドキュメントはまだ未完成です。英語のドキュメントをご参照ください。
@@ -26,6 +26,10 @@ Univer は、開発者に強力で柔軟かつ使いやすいオフィススイ�
 [![Trendshift][github-trending-shield]][github-trending-url]
 
 </div>
+
+[Univer Platform](https://github.com/dream-num/univer-mcp) を使って自然言語で Univer Spreadsheets を操作し、本物の AI ネイティブなスプレッドシートを構築する。
+
+https://github.com/user-attachments/assets/7429bd5f-d769-4057-9e67-353337531024
 
 <details open>
 <summary>
@@ -112,13 +116,14 @@ Univer は多言語をサポートしており、以下の言語が利用可能�
 - `ru-RU`
 - `vi-VN`
 - `fa-IR`
+- `ja-JP`
 - `ko-KR`
 - `es-ES`
 - `ca-ES`
 
 `zh-CN` と `en-US` は公式サポート言語であり、その他の言語はコミュニティによって提供されています。
 
-[Using Custom Locales](https://univer.ai/guides/sheet/getting-started/i18n#using-custom-locales)を使用して、追加の言語を追加することができます。また、新しい言語サポートを追加するために[貢献ガイド](/CONTRIBUTING.md)を参照してください。
+[Using Custom Locales](https://docs.univer.ai/guides/sheets/getting-started/i18n#%E3%82%AB%E3%82%B9%E3%82%BF%E3%83%A0%E8%A8%80%E8%AA%9E%E3%83%91%E3%83%83%E3%82%AF)を使用して、追加の言語を追加することができます。また、新しい言語サポートを追加するために[貢献ガイド](/CONTRIBUTING.md)を参照してください。
 
 ## 👾 ショーケース
 
@@ -126,7 +131,7 @@ AI 製品に Univer を組み込み、データ表示ツールとして活用し
 
 [![][examples-preview-capalyze]][examples-link-capalyze]
 
-[Univer Examples](https://univer.ai/examples) ですべての例を見つけることができます。
+[Univer Examples](https://docs.univer.ai/showcase) ですべての例を見つけることができます。
 
 | **📊 Spreadsheets** | **📊 Multi-instance** | **📊 Uniscript** |
 | :---: | :---: | :---: |

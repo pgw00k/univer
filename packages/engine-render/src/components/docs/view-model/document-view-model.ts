@@ -111,6 +111,12 @@ export function parseDataStreamToTree(dataStream: string, tables?: ICustomTable[
             const sectionNode = DataStreamTreeNode.create(DataStreamTreeNodeType.SECTION_BREAK);
             const tempParagraphList = tableCellList.length > 0 ? cellParagraphList : paragraphList;
 
+            if (tempParagraphList.length === 0) {
+                const emptyParagraph = DataStreamTreeNode.create(DataStreamTreeNodeType.PARAGRAPH, '');
+                emptyParagraph.setIndexRange(i, i - 1);
+                tempParagraphList.push(emptyParagraph);
+            }
+
             batchParent(sectionNode, tempParagraphList);
 
             const lastNode = tempParagraphList[tempParagraphList.length - 1];
@@ -237,6 +243,10 @@ export class DocumentViewModel implements IDisposable {
         this._customBlockCache.clear();
         this._tableCache.clear();
         this._tableNodeCache.clear();
+        // this._headerTreeMap.clear();
+        // this._footerTreeMap.clear();
+        this._segmentViewModels$.complete();
+        this._editAreaChange$.complete();
     }
 
     getHeaderFooterTreeMap() {

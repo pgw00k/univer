@@ -23,12 +23,12 @@ import { IRefSelectionsService, RefSelectionsService, UniverSheetsPlugin } from 
 import { ComponentManager, UI_PLUGIN_CONFIG_KEY } from '@univerjs/ui';
 import { filter } from 'rxjs/operators';
 import { UNIVER_SHEET_PERMISSION_USER_PART } from './consts/permission';
-import { ActiveWorksheetController } from './controllers/active-worksheet/active-worksheet.controller';
 import { AutoFillController } from './controllers/auto-fill.controller';
 import { AutoHeightController } from './controllers/auto-height.controller';
 import { AutoWidthController } from './controllers/auto-width.controller';
 import { CellAlertRenderController } from './controllers/cell-alert.controller';
 import { CellCustomRenderController } from './controllers/cell-custom-render.controller';
+import { CellPopupEditorController } from './controllers/cell-popup-editor.controller';
 import { SheetCheckboxController } from './controllers/checkbox.controller';
 import { SheetClipboardController } from './controllers/clipboard/clipboard.controller';
 import { defaultPluginConfig, SHEETS_UI_PLUGIN_CONFIG_KEY } from './controllers/config.schema';
@@ -83,6 +83,7 @@ import { FormatPainterService, IFormatPainterService } from './services/format-p
 import { HoverManagerService } from './services/hover-manager.service';
 import { IMarkSelectionService, MarkSelectionService } from './services/mark-selection/mark-selection.service';
 import { SheetPermissionPanelModel } from './services/permission/sheet-permission-panel.model';
+import { SheetPermissionRenderManagerService } from './services/permission/sheet-permission-render-manager.service';
 import { SheetPermissionUserManagerService } from './services/permission/sheet-permission-user-list.service';
 import { SheetPrintInterceptorService } from './services/print-interceptor.service';
 import { SheetScrollManagerService } from './services/scroll-manager.service';
@@ -163,7 +164,6 @@ export class UniverSheetsUIPlugin extends Plugin {
             [SheetCellEditorResizeService],
 
             // controllers
-            [ActiveWorksheetController],
             [AutoHeightController],
             [AutoWidthController],
             [FormulaEditorController],
@@ -181,6 +181,7 @@ export class UniverSheetsUIPlugin extends Plugin {
             [SheetPermissionPanelModel],
             [SheetPermissionInitUIController],
             [SheetPermissionUserManagerService],
+            [SheetPermissionRenderManagerService],
             [SheetPermissionInterceptorClipboardController],
             [SheetPermissionCheckUIController],
             [SheetPermissionRenderManagerController],
@@ -201,7 +202,6 @@ export class UniverSheetsUIPlugin extends Plugin {
         touchDependencies(this._injector, [
             [SheetUIController],
             [SheetsRenderService],
-            [ActiveWorksheetController],
             [SheetPermissionCheckUIController],
             [SheetPermissionInitUIController],
         ]);
@@ -261,6 +261,7 @@ export class UniverSheetsUIPlugin extends Plugin {
             [FormatPainterRenderController],
             [ClipboardRenderController],
             [CellAlertRenderController],
+            [CellPopupEditorController],
             [ForceStringAlertRenderController],
             [MarkSelectionRenderController],
             [HoverRenderController],

@@ -23,15 +23,15 @@ import {
     SetRangeValuesMutation,
     SetSelectionsOperation,
     SetWorksheetColWidthMutation,
+    SetWorksheetRowAutoHeightMutation,
     SetWorksheetRowHeightMutation,
     SheetsSelectionsService,
 } from '@univerjs/sheets';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SheetSkeletonManagerService } from '../../sheet-skeleton-manager.service';
 import { ISheetClipboardService } from '../clipboard.service';
 import { clipboardTestBed } from './clipboard-test-bed';
-import { excelSample, excelSample2, excelSample3 } from './constant';
+import { excelSample, excelSample2, excelSample3, excelSample4, excelSample5 } from './constant';
 
 describe('Test clipboard', () => {
     let univer: Univer;
@@ -100,6 +100,7 @@ describe('Test clipboard', () => {
         commandService.registerCommand(RemoveWorksheetMergeMutation);
         commandService.registerCommand(SetSelectionsOperation);
         commandService.registerCommand(MoveRangeMutation);
+        commandService.registerCommand(SetWorksheetRowAutoHeightMutation);
 
         sheetSkeletonManagerService = get(SheetSkeletonManagerService);
         sheetClipboardService = get(ISheetClipboardService);
@@ -216,7 +217,14 @@ describe('Test clipboard', () => {
             expect(cellStyle?.bg).toStrictEqual({ rgb: 'rgb(15,158,213)' });
             const richTextStyle = getValues(2, 3, 2, 3)?.[0]?.[0]?.p;
             expect(richTextStyle?.body?.dataStream).toBe('Univer\r\n');
-            expect(richTextStyle?.body?.paragraphs).toStrictEqual([{ startIndex: 6 }]);
+            expect(richTextStyle?.body?.paragraphs).toStrictEqual([
+                {
+                    paragraphStyle: {
+                        horizontalAlign: 0,
+                    },
+                    startIndex: 6,
+                },
+            ]);
             expect(richTextStyle?.body?.textRuns).toStrictEqual([
                 {
                     st: 1,
@@ -352,6 +360,66 @@ describe('Test clipboard', () => {
             const cellValue = getValues(0, 0, 0, 0)?.[0]?.[0];
             expect(cellValue?.v).toStrictEqual('123456789123456789');
             expect(cellValue?.t).toStrictEqual(CellValueType.FORCE_STRING);
+        });
+
+        it('copy value is 1,234.57, the format "#,##0.00", the origin value 1234.567', async () => {
+            const worksheet = get(IUniverInstanceService).getUniverSheetInstance('test')?.getSheetBySheetId('sheet1');
+            if (!worksheet) return false;
+
+            // set selection to K1:L1
+            const selectionManager = get(SheetsSelectionsService);
+            selectionManager.addSelections([
+                {
+                    range: {
+                        startRow: 0,
+                        startColumn: 0,
+                        endRow: 0,
+                        endColumn: 0,
+                        rangeType: RANGE_TYPE.NORMAL,
+                    },
+                    primary: null,
+                    style: null,
+                },
+            ]);
+
+            // paste data, excelSample2 value is 000123456
+            const res = await sheetClipboardService.legacyPaste(excelSample4);
+            expect(res).toBeTruthy();
+
+            // check the values
+            const cellValue = getValues(0, 0, 0, 0)?.[0]?.[0];
+            expect(cellValue?.v).toBe(1234.57);
+            expect(cellValue?.t).toBe(CellValueType.NUMBER);
+        });
+
+        it('copy value is $ 23,123.00, the format "$#,##0.00", the origin value 23123', async () => {
+            const worksheet = get(IUniverInstanceService).getUniverSheetInstance('test')?.getSheetBySheetId('sheet1');
+            if (!worksheet) return false;
+
+            // set selection to K1:L1
+            const selectionManager = get(SheetsSelectionsService);
+            selectionManager.addSelections([
+                {
+                    range: {
+                        startRow: 0,
+                        startColumn: 0,
+                        endRow: 0,
+                        endColumn: 0,
+                        rangeType: RANGE_TYPE.NORMAL,
+                    },
+                    primary: null,
+                    style: null,
+                },
+            ]);
+
+            // paste data, excelSample2 value is 000123456
+            const res = await sheetClipboardService.legacyPaste(excelSample5);
+            expect(res).toBeTruthy();
+
+            // check the values
+            const cellValue = getValues(0, 0, 0, 0)?.[0]?.[0];
+            expect(cellValue?.v).toBe(23123);
+            expect(cellValue?.t).toBe(CellValueType.NUMBER);
         });
     });
 });

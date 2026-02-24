@@ -18,25 +18,26 @@ import type { Dependency } from '@univerjs/core';
 import type { IUniverSheetsConfig } from './controllers/config.schema';
 import { AUTO_HEIGHT_FOR_MERGED_CELLS, DependentOn, IConfigService, Inject, Injector, IS_ROW_STYLE_PRECEDE_COLUMN_STYLE, merge, mergeOverrideWithDependencies, Plugin, registerDependencies, touchDependencies, UniverInstanceType } from '@univerjs/core';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
+import { ActiveWorksheetController } from './controllers/active-worksheet.controller';
 import { BasicWorksheetController } from './controllers/basic-worksheet.controller';
 import { CalculateResultApplyController } from './controllers/calculate-result-apply.controller';
 import { ONLY_REGISTER_FORMULA_RELATED_MUTATIONS_KEY } from './controllers/config';
 import { defaultPluginConfig, SHEETS_PLUGIN_CONFIG_KEY } from './controllers/config.schema';
 import { DefinedNameDataController } from './controllers/defined-name-data.controller';
+import { SheetsFreezeSyncController } from './controllers/freeze-sync.controller';
 import { MergeCellController } from './controllers/merge-cell.controller';
 import { NumberCellDisplayController } from './controllers/number-cell.controller';
 import { SheetPermissionCheckController } from './controllers/permission/sheet-permission-check.controller';
 import { SheetPermissionInitController } from './controllers/permission/sheet-permission-init.controller';
 import { SheetPermissionViewModelController } from './controllers/permission/sheet-permission-view-model.controller';
-
 import { ZebraCrossingCacheController } from './controllers/zebar-crossing.controller';
 import { RangeProtectionRenderModel } from './model/range-protection-render.model';
 import { RangeProtectionRuleModel } from './model/range-protection-rule.model';
-
 import { RangeProtectionCache } from './model/range-protection.cache';
 import { SheetRangeThemeModel } from './model/range-theme-model';
 import { BorderStyleManagerService } from './services/border-style-manager.service';
 import { ExclusiveRangeService, IExclusiveRangeService } from './services/exclusive-range/exclusive-range-service';
+import { SheetLazyExecuteScheduleService } from './services/lazy-execute-schedule.service';
 import { NumfmtService } from './services/numfmt/numfmt.service';
 import { INumfmtService } from './services/numfmt/type';
 import { RangeProtectionRefRangeService } from './services/permission/range-permission/range-protection.ref-range';
@@ -91,6 +92,7 @@ export class UniverSheetsPlugin extends Plugin {
         const dependencies: Dependency[] = [
             // services
             [BorderStyleManagerService],
+            [SheetLazyExecuteScheduleService],
             [SheetsSelectionsService],
             [RefRangeService],
             [WorkbookPermissionService],
@@ -105,6 +107,7 @@ export class UniverSheetsPlugin extends Plugin {
             [NumberCellDisplayController],
             [DefinedNameDataController],
             [ZebraCrossingCacheController],
+            [SheetsFreezeSyncController],
 
             // permission
             [WorksheetPermissionService],
@@ -140,6 +143,7 @@ export class UniverSheetsPlugin extends Plugin {
             [RangeProtectionService],
             [IExclusiveRangeService],
             [SheetPermissionInitController],
+            [SheetsFreezeSyncController],
         ]);
     }
 
@@ -152,6 +156,10 @@ export class UniverSheetsPlugin extends Plugin {
             [SheetPermissionViewModelController],
             [SheetSkeletonService],
         ]);
+
+        if (!this._config?.onlyRegisterFormulaRelatedMutations) {
+            this._injector.add([ActiveWorksheetController]);
+        }
     }
 
     override onRendered(): void {
@@ -162,6 +170,7 @@ export class UniverSheetsPlugin extends Plugin {
 
     override onReady(): void {
         touchDependencies(this._injector, [
+            [ActiveWorksheetController],
             [CalculateResultApplyController],
             [DefinedNameDataController],
             [ZebraCrossingCacheController],

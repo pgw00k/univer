@@ -46,7 +46,6 @@ import {
     COMMON_LABEL_COMPONENT,
     FONT_FAMILY_COMPONENT,
     FONT_FAMILY_ITEM_COMPONENT,
-    FONT_FAMILY_LIST,
     FONT_SIZE_COMPONENT,
     FONT_SIZE_LIST,
     getMenuHiddenObservable,
@@ -480,12 +479,16 @@ export function FontFamilySelectorMenuItemFactory(accessor: IAccessor): IMenuSel
         tooltip: 'toolbar.font',
         type: MenuItemType.SELECTOR,
         label: FONT_FAMILY_COMPONENT,
-        selections: FONT_FAMILY_LIST.map((item) => ({
+        selections: [{
             label: {
                 name: FONT_FAMILY_ITEM_COMPONENT,
+                hoverable: false,
+                selectable: false,
+                props: {
+                    id: SetInlineFormatFontFamilyCommand.id,
+                },
             },
-            value: item.value,
-        })),
+        }],
         // disabled$: getCurrentSheetDisabled$(accessor),
         value$: new Observable((subscriber) => {
             const defaultValue = DEFAULT_STYLES.ff;
@@ -617,7 +620,7 @@ export function HeadingSelectorMenuItemFactory(accessor: IAccessor): IMenuSelect
     };
 }
 
-export function TextColorSelectorMenuItemFactory(accessor: IAccessor): IMenuSelectorItem<string> {
+export function TextColorSelectorMenuItemFactory(accessor: IAccessor): IMenuSelectorItem<string, string | undefined> {
     const commandService = accessor.get(ICommandService);
     const themeService = accessor.get(ThemeService);
 
@@ -634,6 +637,29 @@ export function TextColorSelectorMenuItemFactory(accessor: IAccessor): IMenuSele
                     hoverable: false,
                     selectable: false,
                 },
+                value$: new Observable<string>((subscriber) => {
+                    const defaultValue = DEFAULT_STYLES.cl.rgb;
+                    const calc = () => {
+                        const textRun = getFontStyleAtCursor(accessor);
+
+                        if (!textRun) {
+                            subscriber.next(defaultValue);
+                            return;
+                        }
+
+                        const color = textRun.ts?.cl?.rgb;
+                        subscriber.next(color ?? defaultValue);
+                    };
+
+                    const disposable = commandService.onCommandExecuted((c) => {
+                        if (c.id === SetInlineFormatTextColorCommand.id) {
+                            calc();
+                        }
+                    });
+
+                    calc();
+                    return disposable.dispose;
+                }),
             },
         ],
         value$: new Observable<string>((subscriber) => {
@@ -982,7 +1008,7 @@ export function ResetBackgroundColorMenuItemFactory(accessor: IAccessor): IMenuB
     };
 }
 
-export function BackgroundColorSelectorMenuItemFactory(accessor: IAccessor): IMenuSelectorItem<string> {
+export function BackgroundColorSelectorMenuItemFactory(accessor: IAccessor): IMenuSelectorItem<string, string | undefined> {
     const commandService = accessor.get(ICommandService);
     const themeService = accessor.get(ThemeService);
 
@@ -998,6 +1024,30 @@ export function BackgroundColorSelectorMenuItemFactory(accessor: IAccessor): IMe
                     hoverable: false,
                     selectable: false,
                 },
+                value$: new Observable<string>((subscriber) => {
+                    const defaultValue = DEFAULT_STYLES.bg.rgb;
+                    const calc = () => {
+                        const textRun = getFontStyleAtCursor(accessor);
+
+                        if (!textRun) {
+                            subscriber.next(defaultValue);
+                            return;
+                        }
+
+                        const color = textRun.ts?.bg?.rgb;
+
+                        subscriber.next(color ?? defaultValue);
+                    };
+
+                    const disposable = commandService.onCommandExecuted((c) => {
+                        if (c.id === SetInlineFormatTextBackgroundColorCommand.id) {
+                            calc();
+                        }
+                    });
+
+                    calc();
+                    return disposable.dispose;
+                }),
             },
         ],
         value$: new Observable<string>((subscriber) => {

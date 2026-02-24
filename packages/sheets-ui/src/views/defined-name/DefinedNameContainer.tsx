@@ -35,18 +35,16 @@ import { DefinedNameInput } from './DefinedNameInput';
 export const DefinedNameContainer = () => {
     const commandService = useDependency(ICommandService);
     const univerInstanceService = useDependency(IUniverInstanceService);
-    const workbook = univerInstanceService.getCurrentUnitOfType<Workbook>(UniverInstanceType.UNIVER_SHEET)!;
     const localeService = useDependency(LocaleService);
     const definedNamesService = useDependency(IDefinedNamesService);
     const selectionManagerService = useDependency(SheetsSelectionsService);
 
-    if (workbook == null) {
-        return;
-    }
-
-    const unitId = workbook.getUnitId();
-
+    const workbook = univerInstanceService.getCurrentUnitOfType<Workbook>(UniverInstanceType.UNIVER_SHEET);
+    const unitId = workbook?.getUnitId();
     const getDefinedNameMap = () => {
+        if (!unitId) {
+            return [];
+        }
         const definedNameMap = definedNamesService.getDefinedNameMap(unitId);
         if (definedNameMap) {
             return Array.from(Object.values(definedNameMap));
@@ -55,11 +53,13 @@ export const DefinedNameContainer = () => {
     };
 
     const [editState, setEditState] = useState(false);
-    const [definedNames, setDefinedNames] = useState<IDefinedNamesServiceParam[]>(getDefinedNameMap());
+    const [definedNames, setDefinedNames] = useState<IDefinedNamesServiceParam[]>([]);
     const [editorKey, setEditorKey] = useState<Nullable<string>>(null);
     const [deleteConformKey, setDeleteConformKey] = useState<Nullable<string>>();
 
     useEffect(() => {
+        setDefinedNames(getDefinedNameMap());
+
         const definedNamesSubscription = definedNamesService.update$.subscribe(() => {
             setDefinedNames(getDefinedNameMap());
         });
@@ -68,6 +68,10 @@ export const DefinedNameContainer = () => {
             definedNamesSubscription.unsubscribe();
         };
     }, []);
+
+    if (!workbook || !unitId) {
+        return;
+    }
 
     const insertConfirm = (param: IDefinedNamesServiceParam) => {
         const { name, formulaOrRefString, comment, localSheetId, hidden } = param;
@@ -93,6 +97,7 @@ export const DefinedNameContainer = () => {
     }
 
     function handleDeleteConfirm(id: string) {
+        if (!unitId) return;
         const item = definedNamesService.getValueById(unitId, id);
         commandService.executeCommand(RemoveDefinedNameCommand.id, { ...item, unitId });
         setDeleteConformKey(null);
@@ -209,14 +214,16 @@ export const DefinedNameContainer = () => {
                         <div
                             key={index}
                             className={`
-                              univer-divide-x-0 univer-divide-y univer-divide-solid univer-divide-gray-200
+                              univer-relative univer-w-full univer-divide-x-0 univer-divide-y univer-divide-solid
+                              univer-divide-gray-200
                               dark:!univer-divide-gray-600
                             `}
                         >
                             <div
                                 className={clsx(`
-                                  univer-group univer-relative univer-flex univer-cursor-default univer-select-none
-                                  univer-items-center univer-justify-between univer-rounded-md univer-p-2
+                                  univer-group univer-relative univer-flex univer-w-full univer-cursor-default
+                                  univer-select-none univer-items-center univer-justify-between univer-rounded-md
+                                  univer-p-2
                                   hover:univer-bg-gray-50
                                   dark:hover:!univer-bg-gray-700
                                 `, {
@@ -227,7 +234,7 @@ export const DefinedNameContainer = () => {
                                 <div title={definedName.comment}>
                                     <div
                                         className={`
-                                          univer-my-1 univer-max-h-[100px] univer-max-w-[190px] univer-overflow-hidden
+                                          univer-my-1 univer-max-h-[100px] univer-max-w-[190px] univer-truncate
                                           univer-text-sm univer-font-medium univer-text-gray-900
                                           dark:!univer-text-white
                                         `}
@@ -239,51 +246,53 @@ export const DefinedNameContainer = () => {
                                     </div>
                                     <div
                                         className={`
-                                          univer-my-1 univer-max-h-[100px] univer-overflow-hidden univer-text-ellipsis
-                                          univer-text-xs univer-text-gray-500
+                                          univer-my-1 univer-max-h-[100px] univer-w-full univer-max-w-[190px]
+                                          univer-truncate univer-text-xs univer-text-gray-500
                                         `}
+                                        title={definedName.formulaOrRefString}
                                     >
                                         {definedName.formulaOrRefString}
                                     </div>
                                 </div>
-                                <Tooltip title={localeService.t('definedName.updateButton')} placement="top">
-                                    <a
-                                        className={`
-                                          univer-absolute univer-right-[60px] univer-top-1/2 univer-hidden
-                                          -univer-translate-y-1/2 univer-cursor-pointer univer-items-center
-                                          univer-justify-center univer-rounded univer-p-1 univer-text-xs
-                                          univer-text-primary-600
-                                          hover:univer-bg-gray-100
-                                          group-hover:univer-flex
-                                          dark:hover:!univer-bg-gray-600
-                                        `}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            closeInsertOpenKeyEditor(definedName.id);
-                                        }}
-                                    >
-                                        <PenIcon />
-                                    </a>
-                                </Tooltip>
-                                <Tooltip title={localeService.t('definedName.deleteButton')} placement="top">
-                                    <a
-                                        className={`
-                                          univer-text-error univer-absolute univer-right-5 univer-top-1/2 univer-hidden
-                                          -univer-translate-y-1/2 univer-cursor-pointer univer-items-center
-                                          univer-justify-center univer-rounded univer-p-1 univer-text-xs
-                                          univer-text-red-600
-                                          hover:univer-bg-gray-100
-                                          group-hover:univer-flex
-                                          dark:hover:!univer-bg-gray-600
-                                        `}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteDefinedName(definedName.id);
-                                        }}
-                                    >
-                                        <DeleteIcon />
-                                    </a>
-                                </Tooltip>
+                                <div
+                                    className={`
+                                      univer-absolute univer-right-5 univer-top-1/2 univer-hidden
+                                      -univer-translate-y-1/2 univer-cursor-pointer univer-items-center
+                                      univer-justify-end univer-gap-7 univer-text-xs univer-text-primary-600
+                                      group-hover:univer-flex
+                                      dark:hover:!univer-bg-gray-600
+                                    `}
+                                >
+                                    <Tooltip title={localeService.t('definedName.updateButton')} placement="top">
+                                        <a
+                                            className={`
+                                              univer-rounded univer-p-1
+                                              hover:univer-bg-gray-100
+                                            `}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                closeInsertOpenKeyEditor(definedName.id);
+                                            }}
+                                        >
+                                            <PenIcon />
+                                        </a>
+                                    </Tooltip>
+                                    <Tooltip title={localeService.t('definedName.deleteButton')} placement="top">
+                                        <a
+                                            className={`
+                                              univer-rounded univer-p-1 univer-text-red-600
+                                              hover:univer-bg-gray-100
+                                            `}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteDefinedName(definedName.id);
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </a>
+                                    </Tooltip>
+                                </div>
+
                             </div>
 
                             <Confirm

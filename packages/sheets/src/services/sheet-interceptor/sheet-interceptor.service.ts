@@ -159,6 +159,7 @@ export class SheetInterceptorService extends Disposable {
 
         this._workbookDisposables.forEach((disposable) => disposable.dispose());
         this._workbookDisposables.clear();
+        this._worksheetDisposables.forEach((disposable) => disposable.dispose());
         this._worksheetDisposables.clear();
 
         this._interceptorsByName.clear();
@@ -385,7 +386,7 @@ export class SheetInterceptorService extends Disposable {
         const key = _key ?? byNamesKey;
         let composed = this._composedInterceptorByKey.get(key);
 
-        if (!composed || this._interceptorsDirty) {
+        if (!composed || !this._interceptorsDirty) {
             let interceptors = this._interceptorsByName.get(byNamesKey) as unknown as Array<IInterceptor<any, any>> | undefined;
             if (interceptors && filter) {
                 interceptors = interceptors.filter(filter);

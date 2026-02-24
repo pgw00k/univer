@@ -43,6 +43,14 @@ export abstract class SingleUnitUIController extends Disposable {
 
         clearTimeout(this._steadyTimeout);
         clearTimeout(this._renderTimeout);
+        //@ts-ignore
+        delete this._instanceService;
+        //@ts-ignore
+        delete this._layoutService;
+        //@ts-ignore
+        delete this._lifecycleService;
+        //@ts-ignore
+        delete this._renderManagerService;
     }
 
     protected _bootstrapWorkbench() {
@@ -81,6 +89,8 @@ export abstract class SingleUnitUIController extends Disposable {
                     }, STEADY_TIMEOUT);
                 }, 300);
             } catch (error) {
+                clearTimeout(this._steadyTimeout);
+                clearTimeout(this._renderTimeout);
                 if (error instanceof LifecycleUnreachableError) {
                     return;
                 }

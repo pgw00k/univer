@@ -15,7 +15,7 @@
  */
 
 import type { IDataValidationRule, IRange, Nullable, ObjectMatrix, Workbook, Worksheet } from '@univerjs/core';
-import { bufferDebounceTime, DataValidationStatus, Disposable, Inject, IUniverInstanceService, LifecycleService, LifecycleStages, Range, Tools, UniverInstanceType } from '@univerjs/core';
+import { bufferDebounceTime, DataValidationStatus, Disposable, getIntersectRange, Inject, IUniverInstanceService, LifecycleService, LifecycleStages, Range, Tools, UniverInstanceType } from '@univerjs/core';
 import { bufferWhen, filter } from 'rxjs';
 import { SheetDataValidationModel } from '../models/sheet-data-validation-model';
 import { DataValidationCacheService } from './dv-cache.service';
@@ -81,13 +81,22 @@ export class SheetsDataValidationValidatorService extends Disposable {
             throw new Error(`row or col is not defined, row: ${row}, col: ${col}`);
         }
 
-        const rule = this._sheetDataValidationModel.getRuleByLocation(unitId, subUnitId, row, col);
+        let _row = row;
+        let _col = col;
+
+        const mergedCell = worksheet.getMergedCell(row, col);
+        if (mergedCell) {
+            _row = mergedCell.startRow;
+            _col = mergedCell.startColumn;
+        }
+
+        const rule = this._sheetDataValidationModel.getRuleByLocation(unitId, subUnitId, _row, _col);
         if (!rule) {
             return DataValidationStatus.VALID;
         }
 
         return new Promise<DataValidationStatus>((resolve) => {
-            this._sheetDataValidationModel.validator(rule, { unitId, subUnitId, row, col, worksheet, workbook }, (status) => {
+            this._sheetDataValidationModel.validator(rule, { unitId, subUnitId, row: _row, col: _col, worksheet, workbook }, (status) => {
                 resolve(status);
             });
         });
@@ -107,7 +116,7 @@ export class SheetsDataValidationValidatorService extends Disposable {
         return this._validatorByCell(workbook, worksheet, row, col);
     }
 
-    validatorRanges(unitId: string, subUnitId: string, ranges: IRange[]) {
+    async validatorRanges(unitId: string, subUnitId: string, ranges: IRange[]) {
         if (!ranges.length) {
             return Promise.resolve([]);
         }
@@ -122,13 +131,52 @@ export class SheetsDataValidationValidatorService extends Disposable {
             throw new Error(`cannot find current worksheet, sheetId: ${subUnitId}`);
         }
 
-        return Promise.all(ranges.map((range) => {
-            const promises: Promise<DataValidationStatus>[] = [];
-            Range.foreach(range, (row, col) => {
-                promises.push(this._validatorByCell(workbook, worksheet, row, col));
+        const allRules = this._sheetDataValidationModel.getRules(unitId, subUnitId);
+        const ruleRanges = allRules.map((i) => i.ranges).flat();
+        const intersectRanges = ranges.map((range) => ruleRanges.map((ruleRange) => getIntersectRange(range, ruleRange))).flat().filter(Boolean) as IRange[];
+
+        const mergeCells: Array<{
+            resultRowIndex: number;
+            resultColIndex: number;
+            row: number;
+            col: number;
+        }> = [];
+
+        const result = await Promise.all(
+            intersectRanges.map((range, resultRowIndex) => {
+                const promises: Promise<DataValidationStatus>[] = [];
+                for (let row = range.startRow; row <= range.endRow; row++) {
+                    for (let col = range.startColumn; col <= range.endColumn; col++) {
+                        promises.push(this._validatorByCell(workbook, worksheet, row, col));
+
+                        const mergedCell = worksheet.getMergedCell(row, col);
+                        if (mergedCell) {
+                            mergeCells.push({
+                                resultRowIndex,
+                                resultColIndex: promises.length - 1,
+                                row: mergedCell.startRow,
+                                col: mergedCell.startColumn,
+                            });
+                        }
+                    }
+                }
+                return Promise.all(promises);
+            })
+        );
+
+        /**
+         * If this range has merged cells, the validation status of merged cells should be the same as the main cell, so we need to update the status of merged cells here after all validations are done.
+         * Because during the validation process, merged cells are all marked as VALIDATING status in cache.
+         */
+        if (mergeCells.length) {
+            mergeCells.forEach(({ resultRowIndex, resultColIndex, row, col }) => {
+                if (result[resultRowIndex][resultColIndex] === DataValidationStatus.VALIDATING) {
+                    result[resultRowIndex][resultColIndex] = this._dataValidationCacheService.getValue(unitId, subUnitId, row, col) ?? DataValidationStatus.VALID;
+                }
             });
-            return Promise.all(promises);
-        }));
+        }
+
+        return result;
     }
 
     async validatorWorksheet(unitId: string, subUnitId: string) {
@@ -142,15 +190,19 @@ export class SheetsDataValidationValidatorService extends Disposable {
             throw new Error(`cannot find current worksheet, sheetId: ${subUnitId}`);
         }
         const rules = this._sheetDataValidationModel.getRules(unitId, subUnitId);
-        await Promise.all(rules.map((rule) => {
-            return Promise.all(rule.ranges.map((range) => {
-                const promises: Promise<DataValidationStatus>[] = [];
-                Range.foreach(range, (row, col) => {
-                    promises.push(this._validatorByCell(workbook, worksheet, row, col));
-                });
-                return promises;
-            }));
-        }));
+        await Promise.all(
+            rules.map((rule) => {
+                return Promise.all(
+                    rule.ranges.map((range) => {
+                        const promises: Promise<DataValidationStatus>[] = [];
+                        Range.foreach(range, (row, col) => {
+                            promises.push(this._validatorByCell(workbook, worksheet, row, col));
+                        });
+                        return Promise.all(promises);
+                    })
+                );
+            })
+        );
 
         return this._dataValidationCacheService.ensureCache(unitId, subUnitId);
     }

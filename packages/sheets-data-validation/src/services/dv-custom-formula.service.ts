@@ -17,7 +17,7 @@
 import type { IRange, ISheetDataValidationRule } from '@univerjs/core';
 import { Disposable, Inject, isFormulaString, IUniverInstanceService, Rectangle, UniverInstanceType } from '@univerjs/core';
 import { DataValidationModel, DataValidatorRegistryService } from '@univerjs/data-validation';
-import { RegisterOtherFormulaService } from '@univerjs/sheets-formula';
+import { OtherFormulaBizType, RegisterOtherFormulaService } from '@univerjs/engine-formula';
 import { getFormulaCellData, shouldOffsetFormulaByRange } from '../utils/formula';
 import { DataValidationCacheService } from './dv-cache.service';
 
@@ -50,6 +50,12 @@ export class DataValidationCustomFormulaService extends Disposable {
 
         this._initFormulaResultHandler();
         this._initDirtyRanges();
+    }
+
+    override dispose(): void {
+        super.dispose();
+        this._ruleFormulaMap.clear();
+        this._ruleFormulaMap2.clear();
     }
 
     private _initFormulaResultHandler() {
@@ -105,7 +111,7 @@ export class DataValidationCustomFormulaService extends Disposable {
     };
 
     private _registerFormula(unitId: string, subUnitId: string, ruleId: string, formulaString: string, ranges: IRange[]) {
-        return this._registerOtherFormulaService.registerFormulaWithRange(unitId, subUnitId, formulaString, ranges, { ruleId });
+        return this._registerOtherFormulaService.registerFormulaWithRange(unitId, subUnitId, formulaString, ranges, { ruleId }, OtherFormulaBizType.DATA_VALIDATION_CUSTOM, ruleId);
     };
 
     private _handleDirtyRanges(unitId: string, subUnitId: string, ranges: IRange[]) {
@@ -120,11 +126,11 @@ export class DataValidationCustomFormulaService extends Disposable {
     }
 
     private _initDirtyRanges() {
-        this._dataValidationCacheService.dirtyRanges$.subscribe((data) => {
+        this.disposeWithMe(this._dataValidationCacheService.dirtyRanges$.subscribe((data) => {
             if (data.isSetRange) {
                 this._handleDirtyRanges(data.unitId, data.subUnitId, data.ranges);
             }
-        });
+        }));
     }
 
     deleteByRuleId(unitId: string, subUnitId: string, ruleId: string) {

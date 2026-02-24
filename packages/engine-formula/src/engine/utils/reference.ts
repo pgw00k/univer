@@ -437,7 +437,7 @@ export function addQuotesBothSides(name: string) {
  * @param name
  * @returns Quoted name
  */
-function quoteSheetName(name: string) {
+export function quoteSheetName(name: string) {
     return name.replace(/'/g, "''");
 }
 
@@ -446,7 +446,7 @@ function quoteSheetName(name: string) {
  * @param name
  * @returns Unquoted name
  */
-function unquoteSheetName(name: string) {
+export function unquoteSheetName(name: string) {
     return name.replace(/''/g, "'");
 }
 
@@ -463,4 +463,15 @@ function isR1C1Notation(name: string) {
 function startsWithNonAlphabetic(name: string) {
     // Check if the first character is not a letter (including non-English characters)
     return !/^\p{Letter}/u.test(name.charAt(0));
+}
+
+export function splitTableStructuredRef(ref: string) {
+    const idx = ref.indexOf('[');
+    if (idx === -1) {
+        return { tableName: ref, struct: '' };
+    }
+    return {
+        tableName: ref.slice(0, idx),
+        columnStruct: ref.slice(idx), // include [[...]]
+    };
 }

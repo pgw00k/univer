@@ -15,9 +15,9 @@
  */
 
 import type { IMutation } from '@univerjs/core';
+import type { IWorksheetProtectionRule } from '../../services/permission/type';
 import { CommandType } from '@univerjs/core';
 import { WorksheetProtectionRuleModel } from '../../services/permission/worksheet-permission/worksheet-permission-rule.model';
-import type { IWorksheetProtectionRule } from '../../services/permission/type';
 
 export interface IAddWorksheetProtectionParams {
     unitId: string;
@@ -29,8 +29,8 @@ export const AddWorksheetProtectionMutation: IMutation<IAddWorksheetProtectionPa
     id: 'sheet.mutation.add-worksheet-protection',
     type: CommandType.MUTATION,
     handler: (accessor, params) => {
-        const { unitId, rule } = params;
         const worksheetProtectionRuleModel = accessor.get(WorksheetProtectionRuleModel);
+        const { unitId, rule } = params;
         worksheetProtectionRuleModel.addRule(unitId, rule);
         return true;
     },

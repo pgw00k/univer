@@ -27,8 +27,8 @@ export const DeleteWorksheetProtectionMutation: IMutation<IDeleteWorksheetProtec
     id: 'sheet.mutation.delete-worksheet-protection',
     type: CommandType.MUTATION,
     handler: (accessor, params) => {
-        const { unitId, subUnitId } = params;
         const worksheetProtectionRuleModel = accessor.get(WorksheetProtectionRuleModel);
+        const { unitId, subUnitId } = params;
         worksheetProtectionRuleModel.deleteRule(unitId, subUnitId);
         return true;
     },

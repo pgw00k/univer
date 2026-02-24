@@ -29,12 +29,15 @@ import type { IDiscreteRange } from '../utils/range-tools';
 import {
     cellToRange,
     CellValueType,
+    cloneCellData,
+    cloneCellDataMatrix,
+    cloneValue,
     CustomRangeType,
     DEFAULT_STYLES,
     generateRandomId,
+    getNumfmtParseValueFilter,
     isTextFormat,
     IUniverInstanceService,
-    numfmt,
     ObjectMatrix,
     Range,
     Rectangle,
@@ -46,6 +49,8 @@ import {
     AddMergeUndoMutationFactory,
     AddWorksheetMergeMutation,
     getAddMergeMutationRangeByType,
+    getPrimaryForRange,
+    getSheetCommandTarget,
     MoveRangeCommand,
     MoveRangeMutation,
     RemoveMergeUndoMutationFactory,
@@ -165,13 +170,13 @@ export function getMoveRangeMutations(
             const toCellMatrix = toWorksheet.getCellMatrix();
 
             Range.foreach(fromRange, (row, col) => {
-                fromCellValue.setValue(row, col, Tools.deepClone(fromCellMatrix.getValue(row, col)));
+                fromCellValue.setValue(row, col, cloneCellData(fromCellMatrix.getValue(row, col)));
                 newFromCellValue.setValue(row, col, null);
             });
             const toCellValue = new ObjectMatrix<Nullable<ICellData>>();
 
             Range.foreach(toRange, (row, col) => {
-                toCellValue.setValue(row, col, Tools.deepClone(toCellMatrix.getValue(row, col)));
+                toCellValue.setValue(row, col, cloneCellData(toCellMatrix.getValue(row, col)));
             });
 
             const newToCellValue = new ObjectMatrix<Nullable<ICellData>>();
@@ -219,72 +224,76 @@ export function getMoveRangeMutations(
             const toMergeData = toWorksheet.getMergeData();
             const fromMergeRanges = fromMergeData.filter((item) => Rectangle.intersects(item, fromRange));
             const toMergeRanges = toMergeData.filter((item) => Rectangle.intersects(item, toRange));
-
-            const willMoveToMergeRanges = fromMergeRanges
-                .map((mergeRange) => Rectangle.getRelativeRange(mergeRange, fromRange))
-                .map((relativeRange) => Rectangle.getPositionRange(relativeRange, toRange));
-
-            const addMergeCellRanges = getAddMergeMutationRangeByType(willMoveToMergeRanges);
-
             const mergeRedos: Array<{
                 id: string;
                 params: IAddWorksheetMergeMutationParams | IRemoveWorksheetMergeMutationParams;
-            }> = [
-                {
-                    id: RemoveWorksheetMergeMutation.id,
-                    params: {
-                        unitId,
-                        subUnitId: fromSubUnitId,
-                        ranges: fromMergeRanges,
-                    },
-                },
-                {
-                    id: RemoveWorksheetMergeMutation.id,
-                    params: {
-                        unitId,
-                        subUnitId: fromSubUnitId,
-                        ranges: toMergeRanges,
-                    },
-                },
-                {
-                    id: AddWorksheetMergeMutation.id,
-                    params: {
-                        unitId,
-                        subUnitId: toSubUnitId,
-                        ranges: addMergeCellRanges,
-                    },
-                },
-            ];
+            }> = [];
             const mergeUndos: Array<{
                 id: string;
                 params: IAddWorksheetMergeMutationParams | IRemoveWorksheetMergeMutationParams;
-            }> = [
-                {
+            }> = [];
+
+            if (fromMergeRanges.length > 0 || toMergeRanges.length > 0) {
+                const willMoveToMergeRanges = fromMergeRanges
+                    .map((mergeRange) => Rectangle.getRelativeRange(mergeRange, fromRange))
+                    .map((relativeRange) => Rectangle.getPositionRange(relativeRange, toRange));
+                const addMergeCellRanges = getAddMergeMutationRangeByType(willMoveToMergeRanges);
+
+                if (fromMergeRanges.length > 0) {
+                    mergeRedos.push({
+                        id: RemoveWorksheetMergeMutation.id,
+                        params: {
+                            unitId,
+                            subUnitId: fromSubUnitId,
+                            ranges: fromMergeRanges,
+                        },
+                    });
+                    mergeUndos.push({
+                        id: AddWorksheetMergeMutation.id,
+                        params: {
+                            unitId,
+                            subUnitId: fromSubUnitId,
+                            ranges: fromMergeRanges,
+                        },
+                    });
+                }
+
+                if (toMergeRanges.length > 0) {
+                    mergeRedos.push({
+                        id: RemoveWorksheetMergeMutation.id,
+                        params: {
+                            unitId,
+                            subUnitId: fromSubUnitId,
+                            ranges: toMergeRanges,
+                        },
+                    });
+                    mergeUndos.push({
+                        id: AddWorksheetMergeMutation.id,
+                        params: {
+                            unitId,
+                            subUnitId: toSubUnitId,
+                            ranges: toMergeRanges,
+                        },
+                    });
+                }
+
+                mergeRedos.push({
+                    id: AddWorksheetMergeMutation.id,
+                    params: {
+                        unitId,
+                        subUnitId: toSubUnitId,
+                        ranges: addMergeCellRanges,
+                    },
+                });
+                mergeUndos.unshift({
                     id: RemoveWorksheetMergeMutation.id,
                     params: {
                         unitId,
                         subUnitId: toSubUnitId,
                         ranges: addMergeCellRanges,
                     },
-                },
-                {
-                    id: AddWorksheetMergeMutation.id,
-                    params: {
-                        unitId,
-                        subUnitId: toSubUnitId,
-                        ranges: toMergeRanges,
-                    },
-                },
-                {
-                    id: AddWorksheetMergeMutation.id,
-                    params: {
-                        unitId,
-                        subUnitId: fromSubUnitId,
-                        ranges: fromMergeRanges,
-                    },
-                },
-            ];
-            // +++++++++++++++++++++
+                });
+            }
 
             redos = [
                 { id: MoveRangeMutation.id, params: doMoveRangeMutation },
@@ -295,7 +304,7 @@ export function getMoveRangeMutations(
                     params: {
                         unitId,
                         subUnitId: toSubUnitId,
-                        selections: [{ range: toRange }],
+                        selections: [{ range: toRange, primary: getPrimaryForRange(toRange, toWorksheet) }],
                         type: SelectionMoveType.MOVE_END,
                     } as ISetSelectionsOperationParams,
                 },
@@ -310,7 +319,7 @@ export function getMoveRangeMutations(
                         unitId,
                         subUnitId: fromSubUnitId,
                         type: SelectionMoveType.MOVE_END,
-                        selections: [{ range: fromRange }],
+                        selections: [{ range: fromRange, primary: getPrimaryForRange(fromRange, fromWorksheet) }],
                     },
                 },
             ];
@@ -361,7 +370,7 @@ export function getSetCellValueMutations(
                 cellValue.t = CellValueType.STRING;
             } else {
                 const content = String(value.v);
-                const numfmtValue = numfmt.parseValue(content);
+                const numfmtValue = getNumfmtParseValueFilter(content);
                 if (numfmtValue?.v !== undefined && typeof numfmtValue.v === 'number') {
                     // If the numeric string will lose precision when converted to a number, set the cell type to force string
                     // e.g. 123456789123456789
@@ -376,17 +385,17 @@ export function getSetCellValueMutations(
         }
 
         if (value.p?.body && isRichText(value.p.body)) {
-            const newValue = Tools.deepClone({ p: value.p, v: value.v });
+            const newValue = { p: cloneValue(value.p), v: value.v };
             valueMatrix.setValue(realRow, realCol, newValue);
         } else {
-            valueMatrix.setValue(realRow, realCol, Tools.deepClone(cellValue));
+            valueMatrix.setValue(realRow, realCol, cellValue && cloneCellData(cellValue)!);
         }
     });
     // set cell value and style
     const setValuesMutation: ISetRangeValuesMutationParams = {
         unitId,
         subUnitId,
-        cellValue: Tools.deepClone(valueMatrix.getMatrix()),
+        cellValue: cloneCellDataMatrix(valueMatrix.getMatrix()),
     };
 
     redoMutationsInfo.push({
@@ -471,7 +480,7 @@ export function getSetCellStyleMutations(
             (newValue.s as IStyleData).n = style?.n;
         } else {
             const content = String(value.v);
-            const numfmtValue = numfmt.parseValue(content);
+            const numfmtValue = getNumfmtParseValueFilter(content);
             if (numfmtValue?.z) {
                 if (!newValue.s) {
                     newValue.s = {};
@@ -492,7 +501,7 @@ export function getSetCellStyleMutations(
     const setValuesMutation: ISetRangeValuesMutationParams = {
         unitId,
         subUnitId,
-        cellValue: Tools.deepClone(valueMatrix.getMatrix()),
+        cellValue: cloneCellDataMatrix(valueMatrix.getMatrix()),
     };
 
     redoMutationsInfo.push({
@@ -545,7 +554,7 @@ export function getClearCellStyleMutations(
         const clearMutation: ISetRangeValuesMutationParams = {
             subUnitId,
             unitId,
-            cellValue: Tools.deepClone(clearStyleMatrix.getMatrix()),
+            cellValue: cloneCellDataMatrix(clearStyleMatrix.getMatrix()),
         };
         redoMutationsInfo.push({
             id: SetRangeValuesMutation.id,
@@ -592,7 +601,7 @@ export function getClearCellValueMutations(
         const clearMutation: ISetRangeValuesMutationParams = {
             subUnitId,
             unitId,
-            cellValue: Tools.deepClone(clearValueMatrix.getMatrix()),
+            cellValue: cloneCellDataMatrix(clearValueMatrix.getMatrix()),
         };
         redoMutationsInfo.push({
             id: SetRangeValuesMutation.id,
@@ -629,7 +638,6 @@ export function getClearAndSetMergeMutations(
     const undoMutationsInfo: IMutationInfo[] = [];
     const { unitId, subUnitId, range } = pasteTo;
     const { startColumn, startRow, endColumn, endRow } = discreteRangeToRange(range);
-    const hasMerge = false;
     const mergeRangeData: IRange[] = [];
 
     matrix.forValue((row, col, value) => {
@@ -657,63 +665,59 @@ export function getClearAndSetMergeMutations(
     // clear merge
     // remove current range's all merged Cell
     // get all merged cells
-    const currentService = accessor.get(IUniverInstanceService) as IUniverInstanceService;
-    const workbook = currentService.getUniverSheetInstance(unitId);
-    const worksheet = workbook?.getSheetBySheetId(subUnitId);
-    if (workbook && worksheet) {
-        const mergeData = worksheet.getMergeData();
+    const target = getSheetCommandTarget(accessor.get(IUniverInstanceService), { unitId, subUnitId });
+    if (target && target.worksheet) {
+        const mergeData = target.worksheet.getMergeData();
         const mergedCellsInRange = mergeData.filter((rect) =>
             Rectangle.intersects({ startRow, startColumn, endRow, endColumn }, rect)
         );
 
-        const removeMergeMutationParams: IRemoveWorksheetMergeMutationParams = {
-            unitId,
-            subUnitId,
-            ranges: mergedCellsInRange,
-        };
-        redoMutationsInfo.push({
-            id: RemoveWorksheetMergeMutation.id,
-            params: removeMergeMutationParams,
-        });
+        if (mergedCellsInRange.length > 0) {
+            const removeMergeMutationParams: IRemoveWorksheetMergeMutationParams = {
+                unitId,
+                subUnitId,
+                ranges: mergedCellsInRange,
+            };
+            redoMutationsInfo.push({
+                id: RemoveWorksheetMergeMutation.id,
+                params: removeMergeMutationParams,
+            });
 
-        const undoRemoveMergeMutationParams: IAddWorksheetMergeMutationParams = RemoveMergeUndoMutationFactory(
-            accessor,
-            removeMergeMutationParams
-        );
-
-        undoMutationsInfo.push({
-            id: AddWorksheetMergeMutation.id,
-            params: undoRemoveMergeMutationParams,
-        });
+            const undoRemoveMergeMutationParams: IAddWorksheetMergeMutationParams = RemoveMergeUndoMutationFactory(
+                accessor,
+                removeMergeMutationParams
+            );
+            undoMutationsInfo.push({
+                id: AddWorksheetMergeMutation.id,
+                params: undoRemoveMergeMutationParams,
+            });
+        }
     }
 
-    // set merged cell info
-    const addMergeMutationParams: IAddWorksheetMergeMutationParams = {
-        unitId,
-        subUnitId,
-        ranges: mergeRangeData,
-    };
     if (mergeRangeData.length > 0) {
+        // set merged cell info
+        const addMergeMutationParams: IAddWorksheetMergeMutationParams = {
+            unitId,
+            subUnitId,
+            ranges: mergeRangeData,
+        };
         redoMutationsInfo.push({
             id: AddWorksheetMergeMutation.id,
             params: addMergeMutationParams,
         });
-    }
 
-    // undo
-    const undoAddMergeMutation: IRemoveWorksheetMergeMutationParams = AddMergeUndoMutationFactory(
-        accessor,
-        addMergeMutationParams
-    );
-
-    if (mergeRangeData.length > 0) {
-        undoMutationsInfo.push({
+        // undo
+        const undoAddMergeMutation: IRemoveWorksheetMergeMutationParams = AddMergeUndoMutationFactory(
+            accessor,
+            addMergeMutationParams
+        );
+        undoMutationsInfo.unshift({
             id: RemoveWorksheetMergeMutation.id,
             params: undoAddMergeMutation,
         });
     }
 
-    return { undos: undoMutationsInfo, redos: redoMutationsInfo };
+    return { redos: redoMutationsInfo, undos: undoMutationsInfo };
 }
 
 /**

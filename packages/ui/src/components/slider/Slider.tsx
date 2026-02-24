@@ -16,9 +16,10 @@
 
 import type { IDropdownMenuProps } from '@univerjs/design';
 import { LocaleService } from '@univerjs/core';
-import { Button, clsx, DropdownMenu, Tooltip } from '@univerjs/design';
-import { IncreaseIcon, ReduceIcon } from '@univerjs/icons';
-import React, { useMemo, useRef, useState } from 'react';
+import { Button, clsx, DropdownMenu } from '@univerjs/design';
+import * as React from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { ComponentManager } from '../../common';
 import { useDependency } from '../../utils/di';
 
 export interface ISliderProps {
@@ -63,6 +64,7 @@ const SLIDER_WIDTH = 116;
  */
 export function Slider(props: ISliderProps) {
     const localeService = useDependency(LocaleService);
+    const componentManager = useDependency(ComponentManager);
 
     const { value, min = 0, max = 400, disabled = false, resetPoint = 100, shortcuts, onChange } = props;
 
@@ -159,6 +161,9 @@ export function Slider(props: ISliderProps) {
         onSelect: (value: string) => handleSelectZoomLevel(+value),
     }];
 
+    const ReduceIcon = componentManager.get('ReduceIcon');
+    const IncreaseIcon = componentManager.get('IncreaseIcon');
+
     return (
         <div
             className={clsx('univer-flex univer-select-none univer-items-center univer-gap-1', {
@@ -185,18 +190,16 @@ export function Slider(props: ISliderProps) {
                 }}
             >
                 <div ref={sliderInnerRailRef} role="track" className="univer-relative univer-h-0.5">
-                    <Tooltip title={`${localeService.t('zoom-slider.resetTo')} ${resetPoint}%`} placement="top" asChild>
-                        <a
-                            key="reset-button"
-                            className={`
-                              univer-absolute univer-left-1/2 univer-top-1/2 univer-box-border univer-block univer-h-0.5
-                              univer-w-0.5 -univer-translate-x-1/2 -univer-translate-y-1/2 univer-cursor-pointer
-                              univer-rounded-full univer-bg-white
-                            `}
-                            role="button"
-                            onClick={handleReset}
-                        />
-                    </Tooltip>
+                    <a
+                        key="reset-button"
+                        className={`
+                          univer-absolute univer-left-1/2 univer-top-1/2 univer-box-border univer-block univer-size-0.5
+                          -univer-translate-x-1/2 -univer-translate-y-1/2 univer-cursor-pointer univer-rounded-full
+                          univer-bg-white
+                        `}
+                        role="button"
+                        onClick={handleReset}
+                    />
 
                     <button
                         className={clsx(`

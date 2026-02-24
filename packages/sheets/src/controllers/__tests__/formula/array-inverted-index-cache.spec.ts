@@ -35,6 +35,7 @@ import {
     SetFormulaCalculationResultMutation,
     SetFormulaCalculationStartMutation,
     SetFormulaCalculationStopMutation,
+    SetTriggerFormulaCalculationStartMutation,
 } from '@univerjs/engine-formula';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SetRangeValuesMutation } from '../../../commands/mutations/set-range-values.mutation';
@@ -219,7 +220,7 @@ const getFunctionsTestWorkbookData = (): IWorkbookData => {
     };
 };
 
-describe('Test inverted index cache', () => {
+describe('Test inverted index cache 1', () => {
     let get: Injector['get'];
     let worksheet: Worksheet;
     let formulaEngine: FFormula;
@@ -243,6 +244,7 @@ describe('Test inverted index cache', () => {
         commandService = get(ICommandService);
 
         commandService.registerCommand(SetFormulaCalculationStartMutation);
+        commandService.registerCommand(SetTriggerFormulaCalculationStartMutation);
         commandService.registerCommand(SetFormulaCalculationStopMutation);
         commandService.registerCommand(SetFormulaCalculationResultMutation);
         commandService.registerCommand(SetFormulaCalculationNotificationMutation);
@@ -299,7 +301,7 @@ describe('Test inverted index cache', () => {
             ...functions
         );
 
-        formulaEngine.executeCalculation();
+        commandService.syncExecuteCommand(SetFormulaCalculationStartMutation.id, { forceCalculation: true }, { onlyLocal: true });
         await formulaEngine.onCalculationEnd();
 
         getCellValue = (row: number, column: number) => {
@@ -335,11 +337,20 @@ describe('Test inverted index cache', () => {
                     },
                 },
             });
-            formulaEngine.executeCalculation();
+            commandService.syncExecuteCommand(SetFormulaCalculationStartMutation.id, { forceCalculation: true }, { onlyLocal: true });
             await formulaEngine.onCalculationEnd();
 
             // now result should be 1
             expect(getCellValue(30, 3)).toBe(1);
+
+            const result = calculate('=IF((H5:H9=0.03)+(H5:H9=0.01), 0.01, H5:H9)');
+            expect(result).toEqual([
+                [0],
+                [0],
+                [0],
+                [0],
+                [0],
+            ]);
         });
 
         it('Sumif formula test', () => {

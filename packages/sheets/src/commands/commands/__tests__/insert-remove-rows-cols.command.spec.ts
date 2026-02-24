@@ -26,7 +26,6 @@ import {
     UndoCommand,
     UniverInstanceType,
 } from '@univerjs/core';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MergeCellController } from '../../../controllers/merge-cell.controller';
 import { RefRangeService } from '../../../services/ref-range/ref-range.service';
@@ -201,7 +200,7 @@ describe('Test insert and remove rows cols commands', () => {
             expect(getRowCount()).toBe(20);
             expect(getCellStyle(2, 1)).toBe('s4');
 
-            const result = await commandService.executeCommand(InsertRowBeforeCommand.id);
+            const result = await commandService.executeCommand(InsertRowBeforeCommand.id, { value: 1 });
             expect(result).toBeTruthy();
             expect(getRowCount()).toBe(21);
             // the merged cell should be moved down
@@ -251,7 +250,7 @@ describe('Test insert and remove rows cols commands', () => {
             selectColumn(1, 1);
             expect(getColCount()).toBe(20);
 
-            const result = await commandService.executeCommand(InsertColBeforeCommand.id);
+            const result = await commandService.executeCommand(InsertColBeforeCommand.id, { value: 1 });
             expect(result).toBeTruthy();
             expect(getColCount()).toBe(21);
             // Insert column style
@@ -267,6 +266,7 @@ describe('Test insert and remove rows cols commands', () => {
 
         it("Should 'insert after' work", async () => {
             selectColumn(1, 1);
+            expect(getColCount()).toBe(20);
 
             const result = await commandService.executeCommand(InsertColAfterCommand.id);
             expect(result).toBeTruthy();

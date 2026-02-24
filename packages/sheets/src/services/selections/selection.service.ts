@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-import type { DeepReadonly, ISelectionCell, Nullable, Workbook } from '@univerjs/core';
+import type { DeepReadonly, ISelectionCell, IStyleData, Nullable, Workbook } from '@univerjs/core';
 import type { Observable } from 'rxjs';
 import type { ISelectionWithStyle } from '../../basics/selection';
 import type { ISelectionManagerSearchParam } from './type';
-
-import { IUniverInstanceService, RxDisposable, UniverInstanceType } from '@univerjs/core';
+import { IUniverInstanceService, RxDisposable, Tools, UniverInstanceType } from '@univerjs/core';
 import { distinctUntilChanged, of, shareReplay, skip, switchMap, takeUntil } from 'rxjs';
 import { WorkbookSelectionModel } from './selection-data-model';
 import { SelectionMoveType } from './type';
@@ -40,6 +39,11 @@ export class SheetsSelectionsService extends RxDisposable {
     get currentSelectionParam() {
         return this._currentSelectionPos;
     }
+
+    /**
+     * Cache cell styles for current selections, key is `${row}_${column}`.
+     */
+    private _cellStylesCache = new Map<string, IStyleData>();
 
     /**
      * Selection Events, usually triggered when pointerdown in spreadsheet by selection render service after selectionModel has updated.
@@ -76,10 +80,10 @@ export class SheetsSelectionsService extends RxDisposable {
     protected _init(): void {
         const c$ = this._instanceSrv.getCurrentTypeOfUnit$(UniverInstanceType.UNIVER_SHEET).pipe(shareReplay(1), takeUntil(this.dispose$));
         // When workbook changed, unsubscribe the previous workbook selection$ and subscribe the new workbook selection$.
-        this.selectionMoveStart$ = c$.pipe(switchMap((workbook) => !workbook ? of() : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoveStart$));
-        this.selectionMoving$ = c$.pipe(switchMap((workbook) => !workbook ? of() : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoving$));
-        this.selectionMoveEnd$ = c$.pipe(switchMap((workbook) => !workbook ? of([]) : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoveEnd$));
-        this.selectionSet$ = c$.pipe(switchMap((workbook) => !workbook ? of([]) : this._ensureWorkbookSelection(workbook.getUnitId()).selectionSet$));
+        this.selectionMoveStart$ = c$.pipe().pipe(switchMap((workbook) => !workbook ? of() : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoveStart$)).pipe(takeUntil(this.dispose$));
+        this.selectionMoving$ = c$.pipe(switchMap((workbook) => !workbook ? of() : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoving$)).pipe(takeUntil(this.dispose$));
+        this.selectionMoveEnd$ = c$.pipe(switchMap((workbook) => !workbook ? of([]) : this._ensureWorkbookSelection(workbook.getUnitId()).selectionMoveEnd$)).pipe(takeUntil(this.dispose$));
+        this.selectionSet$ = c$.pipe(switchMap((workbook) => !workbook ? of([]) : this._ensureWorkbookSelection(workbook.getUnitId()).selectionSet$)).pipe(takeUntil(this.dispose$));
         this.selectionChanged$ = c$.pipe(switchMap((workbook) => !workbook ? of([]) : this._ensureWorkbookSelection(workbook.getUnitId()).selectionChanged$)).pipe(
             distinctUntilChanged((prev, curr) => {
                 if (prev.length !== curr.length) return false;
@@ -89,11 +93,34 @@ export class SheetsSelectionsService extends RxDisposable {
                 });
             }),
             skip(1)
+        ).pipe(takeUntil(this.dispose$));
+
+        this.disposeWithMe(
+            this._instanceSrv.getTypeOfUnitDisposed$(UniverInstanceType.UNIVER_SHEET).pipe(takeUntil(this.dispose$)).subscribe((workbook) => {
+                this._removeWorkbookSelection(workbook.getUnitId());
+            })
         );
 
-        this._instanceSrv.getTypeOfUnitDisposed$(UniverInstanceType.UNIVER_SHEET).pipe(takeUntil(this.dispose$)).subscribe((workbook) => {
-            this._removeWorkbookSelection(workbook.getUnitId());
-        });
+        // Clear cell styles cache when current selections changed.
+        this.disposeWithMe(
+            this.selectionChanged$.pipe(takeUntil(this.dispose$)).subscribe(() => {
+                this._cellStylesCache.clear();
+            })
+        );
+    }
+
+    override dispose(): void {
+        super.dispose();
+        this._cellStylesCache.clear();
+        this._workbookSelections.forEach((wbSelection) => wbSelection.dispose());
+        this._workbookSelections.clear();
+        // Observables do not have unsubscribe(); active subscriptions are handled via takeUntil(this.dispose$) and disposeWithMe.
+        // Replace exposed observables with simple completed values to avoid holding references.
+        this.selectionMoveStart$ = of(null);
+        this.selectionMoving$ = of(null);
+        this.selectionMoveEnd$ = of([]);
+        this.selectionSet$ = of(null);
+        this.selectionChanged$ = of(null);
     }
 
     /**
@@ -111,6 +138,16 @@ export class SheetsSelectionsService extends RxDisposable {
     getCurrentLastSelection(): DeepReadonly<Nullable<ISelectionWithStyle & { primary: ISelectionCell }>> {
         const selectionData = this._getCurrentSelections();
         return selectionData?.[selectionData.length - 1] as Readonly<Nullable<ISelectionWithStyle & { primary: ISelectionCell }>>;
+    }
+
+    getCurrentLastSelectionPrimaryCell(): DeepReadonly<Nullable<ISelectionCell>> {
+        const current = this._currentSelectionPos;
+        if (!current) {
+            return null;
+        }
+
+        const { unitId, sheetId } = current;
+        return this._ensureWorkbookSelection(unitId).getLastSelectionPrimaryCellOfWorksheet(sheetId);
     }
 
     addSelections(selectionsData: ISelectionWithStyle[]): void;
@@ -231,6 +268,62 @@ export class SheetsSelectionsService extends RxDisposable {
 
     protected _removeWorkbookSelection(unitId: string): void {
         this._workbookSelections.delete(unitId);
+    }
+
+    /**
+     * This method is used to get the common value of a specific cell style property in the current selections.
+     * Used to determine the state related to color panels in the toolbar.
+     * Because in Excel, only the color panels need to show the common color of the current selections, other properties based on the current selection primary cell.
+     * Now only handles text color, fill color, border style, border color.
+     */
+    getCellStylesProperty(property: keyof IStyleData): {
+        isAllValuesSame: boolean;
+        value: Nullable<IStyleData[keyof IStyleData]>;
+    } {
+        const worksheet = this._instanceSrv.getCurrentUnitForType<Workbook>(UniverInstanceType.UNIVER_SHEET)?.getActiveSheet();
+        const selections = this.getCurrentSelections();
+        if (!worksheet || selections.length === 0) {
+            return {
+                isAllValuesSame: false,
+                value: null,
+            };
+        }
+
+        let value: Nullable<IStyleData[keyof IStyleData]> = null;
+
+        for (let i = 0; i < selections.length; i++) {
+            const selection = selections[i];
+            const { startRow, endRow, startColumn, endColumn } = selection.range;
+
+            for (let row = startRow; row <= endRow; row++) {
+                for (let column = startColumn; column <= endColumn; column++) {
+                    const key = `${row}_${column}`;
+                    let style: IStyleData;
+                    if (this._cellStylesCache.has(key)) {
+                        style = this._cellStylesCache.get(key)!;
+                    } else {
+                        style = worksheet.getComposedCellStyle(row, column);
+                        this._cellStylesCache.set(key, style);
+                    }
+
+                    const _value = style[property];
+
+                    if (value !== undefined && value !== null && !Tools.diffValue(value, _value)) {
+                        return {
+                            isAllValuesSame: false,
+                            value: null,
+                        };
+                    }
+
+                    value = _value;
+                }
+            }
+        }
+
+        return {
+            isAllValuesSame: true,
+            value,
+        };
     }
 }
 
