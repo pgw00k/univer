@@ -105,7 +105,7 @@ export class FRange extends FBaseInitialable {
             this._range.endRow >= maxRows ||
             this._range.endColumn >= maxColumns
         ) {
-            throw new Error(`Range is out of bounds. Max rows: ${maxRows}, Max columns: ${maxColumns}, Given range: ${JSON.stringify(this._range)}`);
+            // throw new Error(`Range is out of bounds. Max rows: ${maxRows}, Max columns: ${maxColumns}, Given range: ${JSON.stringify(this._range)}`);
         }
 
         this._runInitializers(
